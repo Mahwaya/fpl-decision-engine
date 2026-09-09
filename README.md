@@ -113,7 +113,7 @@ are gone unless they were captured at the time. This is why collection is automa
 
 | Script | Purpose | Modes |
 |---|---|---|
-| `fpl_collect.py` | Snapshot the live API into SQLite | `--summary` |
+| `fpl_collect.py` | Snapshot the live API into SQLite; prunes + vacuums automatically | `--summary` `--prune` |
 | `backfill_history.py` | Load 4 historical seasons | `--load` `--verify` |
 | `predict.py` | Baselines, prediction log, backtests | `--backfill` `--predict` `--score` `--backtest` `--rank` `--status` |
 | `minutes.py` | Minutes analysis, persistence baseline | `--explore` `--persist` |
@@ -233,13 +233,43 @@ Railway Hobby allows 48 GB RAM per service — this uses ~0.4% of the ceiling.
 | Predict + log | `0 8 * * 6` | Before a Saturday deadline |
 | Score + retrain | `0 10 * * 1` | Monday, once results are final |
 
-### Two risks that must be handled before deploying
+### Deployment risks
 
-1. **Storage.** The `players.raw` JSON column is 1.7 MB per snapshot — **94% of all
-   growth** — projecting ~3 GB/season against a 5 GB volume. Drop it for historical
-   snapshots, keep only the newest. Growth falls to ~53 MB/season.
+1. ~~**Storage.**~~ **RESOLVED** — see "Storage management" below. Growth is now
+   **0.098 MB per snapshot (~52 MB/season)**, measured, down from 1.7 MB.
 2. **Always-on cost.** A 512 MB service running 24/7 costs `0.5 × $10 = $5.00/month`,
    the entire credit. **Sleeping is the cost model, not an optimisation.**
+
+---
+
+## Storage management
+
+`players.raw` stores the complete FPL JSON for all 654 players on every run. Nothing
+reads it; it exists only so a field nobody thought to store can still be recovered.
+Left alone it was **94% of all database growth**, projecting ~3 GB/season against a
+5 GB Railway volume.
+
+`fpl_collect.py` now prunes and vacuums automatically on every run, keeping the blob
+for the newest snapshot only. Run it manually with `python fpl_collect.py --prune`.
+
+> **Pruning alone does not work, and this was measured rather than assumed.**
+> `UPDATE ... SET raw = NULL` shrinks rows *in place*, leaving gaps inside pages
+> rather than whole free pages — `PRAGMA freelist_count` stayed at **0**. New inserts
+> cannot use those fragments, so the file kept extending by **+2.72 MB per snapshot,
+> worse than doing nothing at all**. `VACUUM` rewrites the file and is what actually
+> reclaims the space.
+
+Measured steady state after the fix:
+
+| Snapshot | Size | Growth |
+|---|---|---|
+| before | 33.68 MB | — |
+| 1 | 23.24 MB | **−10.44 MB** (first vacuum) |
+| 2 | 23.34 MB | +0.098 MB |
+| 3 | 23.44 MB | +0.098 MB |
+| 4 | 23.53 MB | +0.094 MB |
+
+**≈52 MB/season.** The cost is ~5 s added to each collection run, twice a day.
 
 ---
 
@@ -258,7 +288,7 @@ Remove with `Unregister-ScheduledTask -TaskName "<name>" -Confirm:$false`.
 
 ## Roadmap
 
-- [ ] Drop the `raw` storage bloat (1 h, blocks deployment)
+- [x] ~~Drop the `raw` storage bloat~~ — done; growth 1.7 MB -> 0.098 MB per snapshot
 - [ ] Score GW4 live — the **first real validation** of everything above
 - [ ] Position-specific models (OpenFPL's approach; still outstanding)
 - [ ] European fixture congestion — CL/EL fixtures are not in the FPL API
@@ -289,3 +319,5 @@ Standing on rather than reinventing:
   `(web_name, position)`; matching on name alone silently picks the wrong player.
 - **`chance_of_playing` is NULL for fit players**, not 0. Normalise to 100 or "cleared
   to play" reads as missing data.
+- **SQLite does not reclaim space on UPDATE.** Nulling a large column leaves
+  intra-page fragmentation, not free pages. Only `VACUUM` shrinks the file.

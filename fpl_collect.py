@@ -205,6 +205,69 @@ def take_snapshot(conn):
     return snap_id
 
 
+# How many recent snapshots keep their full JSON blob. One is enough to
+# diagnose an FPL schema change; older ones are pure storage cost.
+KEEP_RAW_SNAPSHOTS = 1
+
+
+def prune_raw(conn, keep=KEEP_RAW_SNAPSHOTS, verbose=True):
+    """
+    Clear the `raw` JSON blob from all but the newest snapshot(s).
+
+    WHY: `players.raw` stores the complete FPL JSON for all 654 players on every
+    run — about 1.7 MB per snapshot, twice a day. Measured, that is 94% of all
+    database growth and would project to roughly 3 GB per season, exhausting a
+    5 GB Railway volume within two seasons.
+
+    Nothing in the codebase reads this column; it exists only so that a field we
+    did not think to store can still be recovered. Keeping it for the newest
+    snapshot preserves that safety net at ~1.7 MB instead of gigabytes.
+
+    Safe to run repeatedly. Rows are kept, only the blob is nulled.
+    """
+    keep_ids = [r[0] for r in conn.execute(
+        "SELECT id FROM snapshots ORDER BY id DESC LIMIT ?", (keep,))]
+    if not keep_ids:
+        return 0
+
+    placeholders = ",".join("?" * len(keep_ids))
+    before = conn.execute(
+        f"SELECT COUNT(*) FROM players WHERE raw IS NOT NULL"
+        f" AND snapshot_id NOT IN ({placeholders})", keep_ids
+    ).fetchone()[0]
+    if before == 0:
+        if verbose:
+            print("  Nothing to prune.")
+        return 0
+
+    conn.execute(
+        f"UPDATE players SET raw = NULL WHERE snapshot_id NOT IN ({placeholders})",
+        keep_ids,
+    )
+    conn.commit()
+    if verbose:
+        print(f"  Pruned raw JSON from {before:,} player rows "
+              f"(kept snapshot(s) {keep_ids}).")
+    return before
+
+
+def vacuum(conn, verbose=True):
+    """
+    Reclaim the freed pages. SQLite does not shrink the file on DELETE/UPDATE,
+    so without this the space stays allocated and the whole exercise is
+    pointless. VACUUM cannot run inside a transaction.
+    """
+    before = DB_PATH.stat().st_size
+    conn.isolation_level = None          # leave implicit-transaction mode
+    conn.execute("VACUUM")
+    conn.isolation_level = ""            # restore default
+    after = DB_PATH.stat().st_size
+    if verbose:
+        print(f"  Vacuumed: {before/1e6:.1f} MB -> {after/1e6:.1f} MB "
+              f"(reclaimed {(before-after)/1e6:.1f} MB)")
+    return before, after
+
+
 def summary(conn):
     snaps = conn.execute(
         "SELECT id, taken_at, current_gw, next_gw FROM snapshots ORDER BY id"
@@ -249,8 +312,22 @@ def main():
         create_schema(conn)
         if "--summary" in sys.argv:
             summary(conn)
+        elif "--prune" in sys.argv:
+            # Manual/one-off cleanup. The scheduled path prunes automatically.
+            prune_raw(conn)
+            vacuum(conn)
         else:
             take_snapshot(conn)
+            # Prune AND vacuum on every run.
+            #
+            # Pruning alone is not enough, and this was measured rather than
+            # assumed: UPDATE ... SET raw = NULL shrinks rows in place, leaving
+            # gaps inside pages rather than whole free pages (freelist_count
+            # stayed at 0). New inserts cannot use those fragments, so the file
+            # kept extending by ~2.7 MB per snapshot — worse than doing nothing.
+            # VACUUM rewrites the file and is what actually reclaims the space.
+            prune_raw(conn, verbose=False)
+            vacuum(conn, verbose=False)
             print(f"\n  Database: {DB_PATH}")
             print("  See what's stored with:  python fpl_collect.py --summary")
     finally:
