@@ -290,6 +290,12 @@ Remove with `Unregister-ScheduledTask -TaskName "<name>" -Confirm:$false`.
 
 - [x] ~~Drop the `raw` storage bloat~~ — done; growth 1.7 MB -> 0.098 MB per snapshot
 - [ ] Score GW4 live — the **first real validation** of everything above
+- [ ] **Opponent difficulty features — the model is currently fixture-blind.** All 47
+      features describe the player; none describe who he is facing. It predicts the
+      same score against Man City as against Hull City. Data is already available
+      (`fixtures.difficulty_h/_a`, and for history both clubs' players share a
+      `fixture` id so the opponent name is derivable). Likely higher value than
+      position-specific models.
 - [ ] Position-specific models (OpenFPL's approach; still outstanding)
 - [ ] European fixture congestion — CL/EL fixtures are not in the FPL API
 - [ ] Deploy to Railway with cron + email (est. 14–17 h)
