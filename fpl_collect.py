@@ -1,0 +1,261 @@
+"""
+FPL data collector — Phase 0.
+
+Takes a timestamped snapshot of the Fantasy Premier League API and appends it
+to a local SQLite database.
+
+WHY SNAPSHOTS: the FPL API only ever shows the CURRENT state. Prices, ownership,
+injury news and availability change constantly, and once they change the old
+values are gone forever. Every run here appends a new snapshot rather than
+overwriting, so you build a history you can later train on. A gameweek you
+didn't capture cannot be recovered.
+
+Standard library only — no pip install required.
+
+Usage:
+    python fpl_collect.py              # take a snapshot
+    python fpl_collect.py --summary    # show what's in the database
+"""
+
+import json
+import sqlite3
+import sys
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+BASE = "https://fantasy.premierleague.com/api"
+DB_PATH = Path(__file__).parent / "fpl.db"
+UA = "fpl-research/0.1 (personal research project)"
+
+# Positions come back as ints; map them once for readability.
+POSITIONS = {1: "GKP", 2: "DEF", 3: "MID", 4: "FWD"}
+
+
+def fetch(endpoint):
+    """GET an FPL endpoint and return parsed JSON."""
+    url = f"{BASE}/{endpoint}"
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return json.loads(resp.read().decode("utf-8"))
+
+
+def create_schema(conn):
+    """Create tables if they don't exist. Safe to call on every run."""
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS snapshots (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            taken_at      TEXT NOT NULL,
+            current_gw    INTEGER,
+            next_gw       INTEGER,
+            next_deadline TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS players (
+            snapshot_id         INTEGER NOT NULL,
+            element_id          INTEGER NOT NULL,
+            web_name            TEXT,
+            team_id             INTEGER,
+            position            TEXT,
+            price               REAL,
+            total_points        INTEGER,
+            form                REAL,
+            minutes             INTEGER,
+            starts              INTEGER,
+            selected_by_percent REAL,
+            transfers_in_event  INTEGER,
+            transfers_out_event INTEGER,
+            status              TEXT,
+            chance_next_round   INTEGER,
+            news                TEXT,
+            news_added          TEXT,
+            ep_next             REAL,
+            raw                 TEXT,
+            PRIMARY KEY (snapshot_id, element_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS teams (
+            snapshot_id INTEGER NOT NULL,
+            team_id     INTEGER NOT NULL,
+            name        TEXT,
+            short_name  TEXT,
+            strength    INTEGER,
+            PRIMARY KEY (snapshot_id, team_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS fixtures (
+            snapshot_id   INTEGER NOT NULL,
+            fixture_id    INTEGER NOT NULL,
+            event         INTEGER,
+            kickoff_time  TEXT,
+            team_h        INTEGER,
+            team_a        INTEGER,
+            difficulty_h  INTEGER,
+            difficulty_a  INTEGER,
+            finished      INTEGER,
+            PRIMARY KEY (snapshot_id, fixture_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_players_element ON players(element_id);
+        CREATE INDEX IF NOT EXISTS idx_fixtures_event  ON fixtures(event);
+        """
+    )
+
+
+def to_float(value, default=0.0):
+    """FPL returns several numeric fields as strings; coerce safely."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def take_snapshot(conn):
+    print("Fetching bootstrap-static ...")
+    boot = fetch("bootstrap-static/")
+    print("Fetching fixtures ...")
+    fixtures = fetch("fixtures/")
+
+    events = boot.get("events", [])
+    current = next((e for e in events if e.get("is_current")), None)
+    nxt = next((e for e in events if e.get("is_next")), None)
+
+    taken_at = datetime.now(timezone.utc).isoformat()
+    cur = conn.execute(
+        "INSERT INTO snapshots (taken_at, current_gw, next_gw, next_deadline) VALUES (?, ?, ?, ?)",
+        (
+            taken_at,
+            current["id"] if current else None,
+            nxt["id"] if nxt else None,
+            nxt["deadline_time"] if nxt else None,
+        ),
+    )
+    snap_id = cur.lastrowid
+
+    # --- players ---
+    rows = []
+    for p in boot.get("elements", []):
+        rows.append(
+            (
+                snap_id,
+                p["id"],
+                p.get("web_name"),
+                p.get("team"),
+                POSITIONS.get(p.get("element_type"), "?"),
+                p.get("now_cost", 0) / 10.0,          # API stores tenths of a million
+                p.get("total_points"),
+                to_float(p.get("form")),
+                p.get("minutes"),
+                p.get("starts"),
+                to_float(p.get("selected_by_percent")),
+                p.get("transfers_in_event"),
+                p.get("transfers_out_event"),
+                p.get("status"),
+                p.get("chance_of_playing_next_round"),
+                p.get("news") or None,
+                p.get("news_added"),
+                to_float(p.get("ep_next")),
+                json.dumps(p, separators=(",", ":")),  # keep everything, for later
+            )
+        )
+    conn.executemany(
+        "INSERT OR REPLACE INTO players VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)", rows
+    )
+
+    # --- teams ---
+    conn.executemany(
+        "INSERT OR REPLACE INTO teams VALUES (?,?,?,?,?)",
+        [
+            (snap_id, t["id"], t.get("name"), t.get("short_name"), t.get("strength"))
+            for t in boot.get("teams", [])
+        ],
+    )
+
+    # --- fixtures ---
+    conn.executemany(
+        "INSERT OR REPLACE INTO fixtures VALUES (?,?,?,?,?,?,?,?,?)",
+        [
+            (
+                snap_id,
+                f["id"],
+                f.get("event"),
+                f.get("kickoff_time"),
+                f.get("team_h"),
+                f.get("team_a"),
+                f.get("team_h_difficulty"),
+                f.get("team_a_difficulty"),
+                1 if f.get("finished") else 0,
+            )
+            for f in fixtures
+        ],
+    )
+
+    conn.commit()
+
+    flagged = sum(1 for r in rows if r[15])  # news column
+    print()
+    print(f"  Snapshot #{snap_id} saved at {taken_at}")
+    print(f"  Players:  {len(rows)}   (with injury/news text: {flagged})")
+    print(f"  Fixtures: {len(fixtures)}")
+    if current:
+        print(f"  Current gameweek: {current['id']}")
+    if nxt:
+        print(f"  Next deadline:    {nxt['deadline_time']}  (GW{nxt['id']})")
+    return snap_id
+
+
+def summary(conn):
+    snaps = conn.execute(
+        "SELECT id, taken_at, current_gw, next_gw FROM snapshots ORDER BY id"
+    ).fetchall()
+    if not snaps:
+        print("No snapshots yet. Run:  python fpl_collect.py")
+        return
+
+    print(f"{len(snaps)} snapshot(s) in {DB_PATH.name}:\n")
+    for s in snaps:
+        n = conn.execute(
+            "SELECT COUNT(*) FROM players WHERE snapshot_id=?", (s[0],)
+        ).fetchone()[0]
+        print(f"  #{s[0]:<3} {s[1][:19]}   GW{s[2]}  ->  GW{s[3]}   {n} players")
+
+    print("\nMost-owned players in the latest snapshot:")
+    latest = snaps[-1][0]
+    for row in conn.execute(
+        """SELECT web_name, position, price, selected_by_percent, total_points
+           FROM players WHERE snapshot_id=?
+           ORDER BY selected_by_percent DESC LIMIT 8""",
+        (latest,),
+    ):
+        # Plain ASCII only: the default Windows console codepage mangles
+        # symbols like the pound sign.
+        print(f"  {row[0]:<16} {row[1]}  {row[2]:>5.1f}m  {row[3]:>5.1f}% owned  {row[4]:>3} pts")
+
+    print("\nCurrently flagged (injury / availability):")
+    for row in conn.execute(
+        """SELECT web_name, status, chance_next_round, news
+           FROM players WHERE snapshot_id=? AND news IS NOT NULL
+           ORDER BY selected_by_percent DESC LIMIT 8""",
+        (latest,),
+    ):
+        chance = "n/a" if row[2] is None else f"{row[2]}%"
+        print(f"  {row[0]:<16} [{row[1]}] {chance:>4}  {row[3][:52]}")
+
+
+def main():
+    conn = sqlite3.connect(DB_PATH)
+    try:
+        create_schema(conn)
+        if "--summary" in sys.argv:
+            summary(conn)
+        else:
+            take_snapshot(conn)
+            print(f"\n  Database: {DB_PATH}")
+            print("  See what's stored with:  python fpl_collect.py --summary")
+    finally:
+        conn.close()
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,26 @@
+# The database is fully regenerable — see "Rebuilding from scratch" in the README.
+# It is ~40 MB and would bloat the repo for no benefit.
+fpl.db
+fpl.db-journal
+fpl.db-wal
+fpl.db-shm
+
+# Alerter output
+alerts.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Secrets — nothing here needs them today, but the deployed app will
+.env
+*.key
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
