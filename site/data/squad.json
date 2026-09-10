@@ -14,7 +14,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.38,
+   "ep": 3.42,
    "flagged": false
   },
   {
@@ -30,23 +30,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.09,
-   "flagged": false
-  },
-  {
-   "name": "Mitchell",
-   "element_id": 204,
-   "position": "DEF",
-   "club": "CRY",
-   "price": 4.5,
-   "owned": 6.0,
-   "status": "a",
-   "chance": null,
-   "news": null,
-   "is_captain": false,
-   "is_vice": false,
-   "started": null,
-   "ep": 3.64,
+   "ep": 3.02,
    "flagged": false
   },
   {
@@ -62,7 +46,23 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.57,
+   "ep": 3.74,
+   "flagged": false
+  },
+  {
+   "name": "Mitchell",
+   "element_id": 204,
+   "position": "DEF",
+   "club": "CRY",
+   "price": 4.5,
+   "owned": 6.0,
+   "status": "a",
+   "chance": null,
+   "news": null,
+   "is_captain": false,
+   "is_vice": false,
+   "started": null,
+   "ep": 3.74,
    "flagged": false
   },
   {
@@ -78,7 +78,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.56,
+   "ep": 3.59,
    "flagged": false
   },
   {
@@ -94,7 +94,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 2.95,
+   "ep": 3.24,
    "flagged": false
   },
   {
@@ -110,7 +110,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 2.65,
+   "ep": 2.58,
    "flagged": false
   },
   {
@@ -119,14 +119,14 @@
    "position": "MID",
    "club": "MUN",
    "price": 12.0,
-   "owned": 45.1,
+   "owned": 45.0,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": true,
    "started": null,
-   "ep": 6.05,
+   "ep": 6.83,
    "flagged": false
   },
   {
@@ -135,14 +135,14 @@
    "position": "MID",
    "club": "CHE",
    "price": 9.6,
-   "owned": 23.8,
+   "owned": 24.0,
    "status": "a",
    "chance": 100,
    "news": null,
    "is_captain": true,
    "is_vice": false,
    "started": null,
-   "ep": 5.97,
+   "ep": 6.22,
    "flagged": false
   },
   {
@@ -151,15 +151,31 @@
    "position": "MID",
    "club": "CHE",
    "price": 7.6,
-   "owned": 30.2,
+   "owned": 30.3,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 5.0,
+   "ep": 5.18,
    "flagged": false
+  },
+  {
+   "name": "Gakpo",
+   "element_id": 367,
+   "position": "MID",
+   "club": "LIV",
+   "price": 7.2,
+   "owned": 13.8,
+   "status": "d",
+   "chance": 75,
+   "news": "Thigh injury - 75% chance of playing",
+   "is_captain": false,
+   "is_vice": false,
+   "started": null,
+   "ep": 4.55,
+   "flagged": true
   },
   {
    "name": "Szoboszlai",
@@ -174,24 +190,8 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 4.44,
+   "ep": 4.45,
    "flagged": false
-  },
-  {
-   "name": "Gakpo",
-   "element_id": 367,
-   "position": "MID",
-   "club": "LIV",
-   "price": 7.2,
-   "owned": 13.9,
-   "status": "d",
-   "chance": 75,
-   "news": "Thigh injury - 75% chance of playing",
-   "is_captain": false,
-   "is_vice": false,
-   "started": null,
-   "ep": 4.33,
-   "flagged": true
   },
   {
    "name": "Isak",
@@ -199,14 +199,14 @@
    "position": "FWD",
    "club": "LIV",
    "price": 9.1,
-   "owned": 21.5,
+   "owned": 21.6,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 5.83,
+   "ep": 6.28,
    "flagged": false
   },
   {
@@ -222,7 +222,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 4.52,
+   "ep": 4.86,
    "flagged": false
   },
   {
@@ -238,7 +238,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.57,
+   "ep": 3.77,
    "flagged": false
   }
  ],
