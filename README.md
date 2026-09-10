@@ -123,7 +123,11 @@ are gone unless they were captured at the time. This is why collection is automa
 | `optimise.py` | MILP squad / transfer / wildcard | `--squad` `--transfers` `--wildcard` `--free N` `--bank X` `--budget X` `--horizon N` |
 | `record_my_team.py` | Record actual squad + captaincy review | `--show` |
 | `alert.py` | Diff snapshots for team-news changes | `--check [--hours N]` `--watch-wildcard` `--watchlist` |
-| `qa.py` | Full QA suite (33 checks) | `--all` |
+| `opponent.py` | Opponent-strength features — **tested and rejected**, kept as a documented negative result | *(imported)* |
+| `publish.py` | Database → the small JSON files the web app reads | `--print` |
+| `app.py` | Streamlit front end; reads JSON only, no database, no model | `streamlit run app.py` |
+| `qa.py` | Modelling QA suite (33 checks) | `--all` |
+| `qa_deploy.py` | Deployment QA suite (88 checks) — JSON contract, workflow, app constraints | *(no args)* |
 
 ---
 
@@ -199,12 +203,73 @@ Two lessons from building it:
 
 ---
 
-## Planned app (feasibility confirmed)
+## Deployment
 
-Measured: full retrain **43.8 s / 210 MB peak**; predicting all 654 players **0.01 s**.
-Railway Hobby allows 48 GB RAM per service — this uses ~0.4% of the ceiling.
+The system runs on **GitHub Actions + Streamlit Community Cloud**, at zero cost.
 
-**Estimated added cost: ~$0.22/month**, inside the existing $5 credit.
+```
+GitHub Actions (the clock)              Streamlit Cloud (the window)
+──────────────────────────              ───────────────────────────
+06:00 & 19:00 UTC daily
+  ├── fpl_collect.py    snapshot
+  ├── predict.py        backfill, score
+  ├── recommend.py      model + log
+  ├── alert.py          diff availability
+  ├── qa.py --all                        reads site/data/*.json
+  ├── qa_deploy.py      ── gate ──       renders squad, captain,
+  ├── publish.py        JSON      ────►  picks, news, accuracy
+  ├── git commit site/data
+  ├── fpl.db ──► release asset
+  └── email if anything is urgent  ────► your inbox
+```
+
+### Why the work and the web page are separate
+
+Streamlit Community Cloud cannot host this project on its own, and the reasons
+are structural rather than cosmetic:
+
+| Constraint | Consequence |
+|---|---|
+| Ephemeral filesystem | `fpl.db` is destroyed on every reboot and redeploy |
+| No scheduler | Nothing runs unless a browser is open |
+| Sleeps after 12 quiet hours | A decision system that only thinks while observed |
+| 1 GB memory cap | Not enough headroom to train comfortably |
+
+So Actions does the thinking on a schedule and commits ~24 KB of JSON;
+Streamlit only draws it. The app opens no database and imports neither
+scikit-learn nor scipy — `qa_deploy.py` fails the build if that ever changes.
+
+`fpl.db` is 23 MB and would bloat git history if committed twice a day, so it
+lives as a **release asset**: downloaded at the start of each run, uploaded at
+the end.
+
+### Why not Railway
+
+Railway Hobby was measured and would work — full retrain **43.8 s / 210 MB
+peak**, ~**$0.22/month** — but it draws on the *same $5 credit* that keeps
+`bcaChessHub` alive, and credit exhaustion is what took that site down in
+September 2026. Actions + Streamlit costs nothing and removes the contention
+entirely. Actions usage is ~180 of the 2,000 free minutes per month; on a
+public repo it is unmetered.
+
+### Setting it up
+
+1. Deploy `app.py` from this repo at [share.streamlit.io](https://share.streamlit.io).
+2. Add three repository secrets for the email alerts (Settings → Secrets →
+   Actions). Without them the pipeline still runs; it just does not email.
+
+   | Secret | Value |
+   |---|---|
+   | `MAIL_USERNAME` | Gmail address |
+   | `MAIL_PASSWORD` | Google **app password** (not the account password) |
+   | `MAIL_TO` | where alerts should arrive |
+
+3. Run the workflow once by hand (Actions → FPL pipeline → Run workflow) to
+   bootstrap the database release.
+
+> **Scheduled workflows are disabled after 60 days of repository inactivity.**
+> This one commits twice a day, so it keeps itself alive — but if the pipeline
+> is ever paused for two months, re-enable it in the Actions tab.
 
 ### Use cases
 
@@ -214,31 +279,48 @@ Railway Hobby allows 48 GB RAM per service — this uses ~0.4% of the ceiling.
 | **Scheduler (cron)** | Collect snapshot · Detect news change · Send email alert · Retrain & score |
 | **FPL API** | Provides player, fixture and availability data |
 
-### Screens
+### Screens (built — `app.py`)
 
-1. **Dashboard** — deadline countdown, captain, alert banner, recommended XI
-2. **My Squad** — your 15 ranked by expected points, with availability flags
-3. **Transfers** — optimiser output, free-transfer selector, hit arithmetic, wildcard mode
-4. **Players** — searchable table of all 654: xPts, price, ownership, form, news
-5. **Alerts** — the news-change log
-6. **Performance** — model vs baselines vs your own gut picks over time
+| Tab | Shows |
+|---|---|
+| **Squad & captain** | Your 15 with expected points, the captaincy call, and where it disagrees with you |
+| **Recommendations** | Top 40 by xPts, filterable by position, price and availability |
+| **Team news** | Availability changes since the last snapshot, prioritised, plus price moves |
+| **Model accuracy** | Error per gameweek per model — scored only against predictions logged *before* the deadline |
+| **My season** | Your own results, the benchmark the model has to beat |
 
-### Automation
+Live countdowns are recomputed in the browser rather than read from the JSON:
+`hours_to_deadline` was true when the pipeline ran, and a stale countdown is
+worse than none. The page also warns when its own data is more than 14 hours
+old, which means a scheduled run failed.
 
-| Job | Cron | Why then |
-|---|---|---|
-| Collect snapshot | `0 9,21 * * *` | Prices/news change daily; missed data is unrecoverable |
-| Diff + alert | `15 21 * * *` | 15 min after the snapshot, so it diffs fresh data |
-| **Deadline email** | `0 18 * * 4,5` | **Thu/Fri — when press conferences actually land** |
-| Predict + log | `0 8 * * 6` | Before a Saturday deadline |
-| Score + retrain | `0 10 * * 1` | Monday, once results are final |
+### Automation (built — `.github/workflows/fpl.yml`)
+
+| Cron (UTC) | Why then |
+|---|---|
+| `0 6 * * *` | Catches overnight news; several hours' warning before a Saturday 11:30/12:30 deadline |
+| `0 19 * * *` | Catches the afternoon press conferences, when most injury news actually lands |
+| `workflow_dispatch` | Run by hand right before a deadline |
+
+Email is conditional, not unconditional: `publish.py` writes a `should_email`
+flag, and the workflow skips the send step when nothing is urgent. A daily
+"nothing happened" email trains you to ignore the inbox, which defeats the
+purpose of having an alerter at all.
+
+Email fires when a **squad or watchlist player's availability changes**, or when
+the **deadline is within 26 hours**.
 
 ### Deployment risks
 
 1. ~~**Storage.**~~ **RESOLVED** — see "Storage management" below. Growth is now
    **0.098 MB per snapshot (~52 MB/season)**, measured, down from 1.7 MB.
-2. **Always-on cost.** A 512 MB service running 24/7 costs `0.5 × $10 = $5.00/month`,
-   the entire credit. **Sleeping is the cost model, not an optimisation.**
+2. ~~**Always-on cost.**~~ **RESOLVED** — no always-on service exists. Actions
+   bills only for minutes used (~180 of 2,000 free, unmetered on a public repo)
+   and Streamlit's free tier is unlimited for public apps.
+3. **Database loss.** `fpl.db` lives in one release asset. `history` and
+   `player_gw` are regenerable, but the **snapshot series is not** — a gameweek
+   of injury-news history that was never captured cannot be recovered. The
+   committed `site/data/*.json` is a partial hedge, not a backup.
 
 ---
 
@@ -273,16 +355,19 @@ Measured steady state after the fix:
 
 ---
 
-## Local automation (current)
+## Local automation
 
-Two Windows scheduled tasks, running now:
+Two Windows scheduled tasks, kept as a redundant local copy:
 
 ```
 FPL Snapshot          09:00, 21:00   -> fpl_collect.py
 FPL Team News Alert   21:15          -> alert.py --check >> alerts.log
 ```
 
-Remove with `Unregister-ScheduledTask -TaskName "<name>" -Confirm:$false`.
+These duplicate what GitHub Actions now does, and only capture snapshots while
+this machine is on. They are harmless — snapshots are additive — but the cloud
+pipeline is the source of truth. Remove them with
+`Unregister-ScheduledTask -TaskName "<name>" -Confirm:$false`.
 
 ---
 

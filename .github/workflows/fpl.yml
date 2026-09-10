@@ -1,0 +1,156 @@
+name: FPL pipeline
+
+# The clock for the whole system.
+#
+# Streamlit Community Cloud has no scheduler and sleeps after 12 quiet hours,
+# so nothing there can be trusted to run on time. This workflow does the work
+# — collect, predict, alert, email — and commits a few hundred KB of JSON that
+# the web app simply renders.
+#
+# 06:00 UTC  catches overnight news and gives several hours' warning before a
+#            Saturday 11:30/12:30 deadline.
+# 19:00 UTC  catches the afternoon press conferences, which is when most
+#            injury news actually lands.
+
+on:
+  schedule:
+    - cron: '0 6 * * *'
+    - cron: '0 19 * * *'
+  workflow_dispatch:          # lets you run it by hand before a deadline
+
+permissions:
+  contents: write             # needed to commit site/data and update the release
+
+concurrency:
+  # Two runs writing fpl.db to the same release asset would race and one would
+  # silently lose its snapshot. Never cancel in progress — a half-finished run
+  # that already uploaded the database is worse than a slow one.
+  group: fpl-pipeline
+  cancel-in-progress: false
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # Mapped to env so later steps can test them in `if:` conditions —
+      # secrets cannot be referenced directly there.
+      MAIL_USERNAME: ${{ secrets.MAIL_USERNAME }}
+      MAIL_PASSWORD: ${{ secrets.MAIL_PASSWORD }}
+      MAIL_TO: ${{ secrets.MAIL_TO }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: requirements-pipeline.txt
+
+      - name: Install pipeline dependencies
+        run: pip install -r requirements-pipeline.txt
+
+      # ---------------------------------------------------------------
+      # The database is 23 MB and grows. Committing it twice a day would
+      # bloat git history permanently, so it lives as a release asset:
+      # downloaded at the start of a run, uploaded at the end.
+      # ---------------------------------------------------------------
+      - name: Restore database from release
+        id: restore
+        run: |
+          if gh release download data --pattern fpl.db --clobber 2>/dev/null; then
+            echo "restored=true" >> "$GITHUB_OUTPUT"
+            ls -lh fpl.db
+          else
+            echo "restored=false" >> "$GITHUB_OUTPUT"
+            echo "No stored database found — this run will bootstrap one."
+          fi
+
+      - name: Bootstrap history (first run only)
+        if: steps.restore.outputs.restored == 'false'
+        run: python backfill_history.py
+
+      - name: Take snapshot
+        run: python fpl_collect.py
+
+      - name: Backfill finished gameweek results
+        run: python predict.py --backfill
+
+      - name: Baseline predictions
+        run: python predict.py --predict
+
+      - name: Score any gameweek that has now finished
+        run: python predict.py --score
+
+      - name: Model predictions and recommendation
+        run: python recommend.py --run
+
+      - name: Availability alerts
+        run: python alert.py --check --hours 24
+
+      - name: Publish JSON for the web app
+        run: python publish.py --print
+
+      # QA runs BEFORE anything is committed or emailed. A failing check stops
+      # the run, so bad data never reaches the public page or your inbox.
+      - name: QA gate
+        run: |
+          python qa.py --all
+          python qa_deploy.py
+
+      - name: Commit published data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add site/data
+          if git diff --staged --quiet; then
+            echo "Nothing changed."
+          else
+            git commit -m "data: GW${{ github.run_number }} refresh $(date -u +'%Y-%m-%d %H:%M UTC')"
+            git push
+          fi
+
+      - name: Store database back to release
+        run: |
+          python fpl_collect.py --prune
+          gh release view data >/dev/null 2>&1 || \
+            gh release create data --title "Database" \
+              --notes "Rolling fpl.db snapshot. Regenerable — see README."
+          gh release upload data fpl.db --clobber
+
+      - name: Decide whether to email
+        id: notify
+        run: |
+          echo "send=$(jq -r '.should_email' site/data/notify.json)" >> "$GITHUB_OUTPUT"
+          echo "subject=$(jq -r '.subject' site/data/notify.json)" >> "$GITHUB_OUTPUT"
+          jq -r '.body' site/data/notify.json > mail_body.txt
+          cat mail_body.txt
+
+      - name: Email
+        # Skipped silently when the mail secrets are not configured, so the
+        # pipeline still works before you set them up.
+        if: steps.notify.outputs.send == 'true' && env.MAIL_USERNAME != ''
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 587
+          secure: false
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          from: FPL Decision Engine
+          to: ${{ secrets.MAIL_TO }}
+          subject: ${{ steps.notify.outputs.subject }}
+          body: file://mail_body.txt
+
+      - name: Upload logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fpl-debug-${{ github.run_number }}
+          path: |
+            site/data/
+            fpl.db
+          retention-days: 5

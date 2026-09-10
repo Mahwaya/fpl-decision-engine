@@ -1,0 +1,9 @@
+# Dependencies for the scheduled pipeline (GitHub Actions only).
+#
+# fpl_collect.py is deliberately standard-library-only, so a plain snapshot
+# needs none of this. Everything below is for the model and the optimiser.
+pandas>=2.2,<3
+numpy>=2.0,<3
+scikit-learn>=1.5,<2
+scipy>=1.13,<2
+pyyaml>=6.0,<7

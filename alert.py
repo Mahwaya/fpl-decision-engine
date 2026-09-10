@@ -98,17 +98,30 @@ def classify(old_news, new_news, old_chance, new_chance, old_status, new_status)
     return None, None
 
 
-def check(conn, hours=None):
+SEV_RANK = {"CRITICAL": 0, "WARNING": 1, "INFO": 2, "GOOD": 3}
+TAG_RANK = {"SQUAD": 0, "WATCH": 1, "OWNED": 2, "-": 3}
+
+
+def collect(conn, hours=None):
+    """
+    Diff two snapshots and return the result as data, not printed text.
+
+    WHY THIS IS SEPARATE FROM check(): the alerter, the JSON publisher and the
+    email notifier all need the same answer. When each formats its own version
+    of "what changed" they drift apart silently — the email says one thing, the
+    web page another, and neither is obviously wrong. One function computes it,
+    three callers render it.
+
+    Returns a dict, or None when there is nothing to compare against.
+    """
     prev, latest = snapshot_pair(conn, hours)
     if prev is None:
-        print("  Only one snapshot exists — nothing to compare yet.")
-        return
+        return None
 
     t_prev, t_latest = conn.execute(
         "SELECT (SELECT taken_at FROM snapshots WHERE id=?),"
         "       (SELECT taken_at FROM snapshots WHERE id=?)", (prev, latest)
     ).fetchone()
-    print(f"  Comparing snapshot #{prev} ({t_prev[:16]})  ->  #{latest} ({t_latest[:16]})")
 
     squad = {r[0] for r in conn.execute(
         "SELECT DISTINCT element_id FROM my_squad WHERE gameweek ="
@@ -125,44 +138,75 @@ def check(conn, hours=None):
         (prev, latest),
     ).fetchall()
 
-    alerts = []
-    price_moves = []
+    alerts, price_moves = [], []
     for (eid, name, pos, price, owned, on_, nn_, oc, nc, os_, ns_, oprice) in rows:
         sev, msg = classify(on_, nn_, oc, nc, os_, ns_)
         if sev:
             if eid in squad:
-                tag, rank = "SQUAD", 0
+                tag = "SQUAD"
             elif eid in watch:
-                tag, rank = "WATCH", 1
+                tag = "WATCH"
             elif (owned or 0) >= 8:
-                tag, rank = "OWNED", 2
+                tag = "OWNED"
             else:
-                tag, rank = "-", 3
-            sev_rank = {"CRITICAL": 0, "WARNING": 1, "INFO": 2, "GOOD": 3}[sev]
-            alerts.append((rank, sev_rank, -(owned or 0), tag, sev, name, pos, owned, msg))
+                tag = "-"
+            alerts.append({
+                "element_id": eid, "name": name, "position": pos,
+                "price": price, "owned": owned or 0.0,
+                "severity": sev, "tag": tag, "message": msg,
+                "_sort": (TAG_RANK[tag], SEV_RANK[sev], -(owned or 0)),
+            })
         if oprice is not None and price is not None and abs(price - oprice) >= 0.05:
-            price_moves.append((name, oprice, price, owned))
+            price_moves.append({
+                "name": name, "old": oprice, "new": price,
+                "owned": owned or 0.0, "direction": "up" if price > oprice else "down",
+            })
 
+    alerts.sort(key=lambda a: a["_sort"])
+    for a in alerts:
+        a.pop("_sort")
+    price_moves.sort(key=lambda p: -p["owned"])
+
+    urgent = [a for a in alerts
+              if a["tag"] in ("SQUAD", "WATCH") and a["severity"] in ("CRITICAL", "WARNING")]
+
+    return {
+        "prev_snapshot": prev, "latest_snapshot": latest,
+        "prev_taken_at": t_prev, "latest_taken_at": t_latest,
+        "alerts": alerts, "price_moves": price_moves, "urgent": urgent,
+    }
+
+
+def check(conn, hours=None):
+    data = collect(conn, hours)
+    if data is None:
+        print("  Only one snapshot exists — nothing to compare yet.")
+        return
+
+    print(f"  Comparing snapshot #{data['prev_snapshot']} ({data['prev_taken_at'][:16]})"
+          f"  ->  #{data['latest_snapshot']} ({data['latest_taken_at'][:16]})")
+
+    alerts = data["alerts"]
     if not alerts:
         print("\n  No availability changes.")
     else:
-        alerts.sort()
         print(f"\n  {len(alerts)} availability change(s), most important first:\n")
         print(f"  {'':<8}{'sev':<10}{'player':<16}{'pos':<5}{'own%':>6}   what changed")
         print("  " + "-" * 74)
-        for _, _, _, tag, sev, name, pos, owned, msg in alerts:
-            t = f"[{tag}]" if tag != "-" else ""
-            print(f"  {t:<8}{sev:<10}{safe(name)[:15]:<16}{pos:<5}{(owned or 0):>6.1f}   {safe(msg)[:40]}")
+        for a in alerts:
+            t = f"[{a['tag']}]" if a["tag"] != "-" else ""
+            print(f"  {t:<8}{a['severity']:<10}{safe(a['name'])[:15]:<16}"
+                  f"{a['position']:<5}{a['owned']:>6.1f}   {safe(a['message'])[:40]}")
 
-    if price_moves:
-        print(f"\n  Price changes ({len(price_moves)}):")
-        for name, o, n, owned in sorted(price_moves, key=lambda x: -(x[3] or 0))[:8]:
-            arrow = "up" if n > o else "down"
-            print(f"    {safe(name)[:15]:<16}{o:.1f} -> {n:.1f}  ({arrow})  {(owned or 0):.1f}% owned")
+    if data["price_moves"]:
+        print(f"\n  Price changes ({len(data['price_moves'])}):")
+        for p in data["price_moves"][:8]:
+            print(f"    {safe(p['name'])[:15]:<16}{p['old']:.1f} -> {p['new']:.1f}"
+                  f"  ({p['direction']})  {p['owned']:.1f}% owned")
 
-    urgent = [a for a in alerts if a[3] in ("SQUAD", "WATCH") and a[4] in ("CRITICAL", "WARNING")]
-    if urgent:
-        print(f"\n  >>> {len(urgent)} change(s) affect players you own or are watching. Review before the deadline.")
+    if data["urgent"]:
+        print(f"\n  >>> {len(data['urgent'])} change(s) affect players you own or are "
+              f"watching. Review before the deadline.")
 
 
 def watch_wildcard(conn):

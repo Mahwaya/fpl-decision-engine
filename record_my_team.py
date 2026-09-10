@@ -91,6 +91,43 @@ GAMEWEEKS = {
             ("Mykolenko",       1, False, False, False),
         ],
     },
+    # ---- GW4: the post-wildcard squad. NOT YET PLAYED. --------------------
+    #
+    # WHY THIS ENTRY EXISTS AT ALL, WITH NO POINTS IN IT: the wildcard was
+    # played before GW4, replacing 10 of the 15 players above. Until this was
+    # recorded, `my_squad` topped out at GW3, so everything that asks "who do I
+    # own?" — alert.py's [SQUAD] tag, optimise.py --transfers — was answering
+    # with a team two thirds of which had been sold. The alerter was warning
+    # about Cash's muscular injury (sold) while filing Gakpo, an actual owned
+    # player, under [WATCH].
+    #
+    # The squad itself is fact and is recorded. The starting XI is NOT yet set,
+    # so `started` is left NULL rather than invented; the captaincy review in
+    # show() filters on started=1 and correctly skips this gameweek until the
+    # real result is backfilled after the deadline.
+    4: {
+        "total_points": None,          # not played yet
+        "transfers": 0,                # wildcard: unlimited, no hits
+        "formation": None,             # XI not yet set
+        "decided_by": "wildcard",
+        "squad": [
+            ("Pickford",     None, None, False, False),
+            ("Horníček",     None, None, False, False),
+            ("Thomas",       None, None, False, False),
+            ("Mitchell",     None, None, False, False),
+            ("Davis",        None, None, False, False),
+            ("Rúben",        None, None, False, False),
+            ("Hall",         None, None, False, False),
+            ("Rogers",       None, None, False, False),
+            ("Palmer",       None, None, True,  False),   # captain — Percival's call
+            ("Gakpo",        None, None, False, False),   # 50/50 fitness; Wirtz planned
+            ("Szoboszlai",   None, None, False, False),
+            ("B.Fernandes",  None, None, False, True),    # vice
+            ("João Pedro",   None, None, False, False),
+            ("Barry",        None, None, False, False),
+            ("Isak",         None, None, False, False),
+        ],
+    },
 }
 
 
@@ -130,6 +167,11 @@ POSITIONS = {
     "B.Fernandes": "MID", "Palmer": "MID", "Szoboszlai": "MID",
     "Mbeumo": "MID", "Rice": "MID",
     "Wood": "FWD", "João Pedro": "FWD", "Havertz": "FWD", "Gyökeres": "FWD",
+    # post-wildcard arrivals (GW4)
+    "Pickford": "GKP", "Horníček": "GKP",
+    "Thomas": "DEF", "Mitchell": "DEF", "Davis": "DEF", "Rúben": "DEF",
+    "Rogers": "MID", "Gakpo": "MID",
+    "Barry": "FWD", "Isak": "FWD",
 }
 
 
@@ -183,13 +225,17 @@ def record(conn):
     for gw, data in GAMEWEEKS.items():
         conn.execute(
             "INSERT OR REPLACE INTO my_gameweeks (gameweek, total_points, transfers, formation, decided_by)"
-            " VALUES (?,?,?,?,'gut')",
-            (gw, data["total_points"], data["transfers"], data["formation"]),
+            " VALUES (?,?,?,?,?)",
+            (gw, data["total_points"], data["transfers"], data["formation"],
+             data.get("decided_by", "gut")),
         )
         conn.executemany(
             "INSERT OR REPLACE INTO my_squad (gameweek, name, points, started, is_captain, is_vice)"
             " VALUES (?,?,?,?,?,?)",
-            [(gw, n, p, int(s), int(c), int(v)) for (n, p, s, c, v) in data["squad"]],
+            # `started` stays NULL for a gameweek whose XI has not been picked
+            # yet — int(None) would raise, and 0 would be a lie.
+            [(gw, n, p, None if s is None else int(s), int(c), int(v))
+             for (n, p, s, c, v) in data["squad"]],
         )
     conn.commit()
     print(f"  Recorded {len(GAMEWEEKS)} gameweeks.")
@@ -204,17 +250,31 @@ def show(conn):
         print("Nothing recorded yet. Run: python record_my_team.py")
         return
 
-    total = sum(r[1] for r in rows)
+    # A gameweek that has not been played yet has no points and must not be
+    # averaged in — otherwise the season average silently drops every time a
+    # forthcoming squad is recorded.
+    played = [r for r in rows if r[1] is not None]
+    total = sum(r[1] for r in played)
+
     print("PROGENY - season so far (all decisions made on gut feel)\n")
     print(f"  {'GW':<4}{'Points':>8}{'Transfers':>11}  Formation   Captain (pts)")
     for gw, pts, tr, form in rows:
         cap = conn.execute(
             "SELECT name, points FROM my_squad WHERE gameweek=? AND is_captain=1", (gw,)
         ).fetchone()
-        cap_s = f"{cap[0]} ({cap[1]})" if cap else "-"
-        print(f"  {gw:<4}{pts:>8}{tr:>11}  {form:<11} {cap_s}")
+        if cap:
+            cap_s = f"{cap[0]} ({cap[1]})" if cap[1] is not None else f"{cap[0]} (pending)"
+        else:
+            cap_s = "-"
+        pts_s = "  --" if pts is None else str(pts)
+        print(f"  {gw:<4}{pts_s:>8}{tr:>11}  {(form or 'not set'):<11} {cap_s}")
 
-    print(f"\n  Total: {total} pts over {len(rows)} GWs   |   Average: {total/len(rows):.1f} per GW")
+    if played:
+        print(f"\n  Total: {total} pts over {len(played)} GWs"
+              f"   |   Average: {total/len(played):.1f} per GW")
+    if len(rows) > len(played):
+        pending = [str(r[0]) for r in rows if r[1] is None]
+        print(f"  GW{', GW'.join(pending)} recorded but not yet played.")
 
     print("\n  Captaincy review (the biggest single lever in FPL):")
     total_lost = 0

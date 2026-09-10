@@ -1,0 +1,629 @@
+"""
+QA suite for the deployment layer.
+
+qa.py checks the modelling. This checks everything the modelling gets published
+THROUGH — the JSON contract between the pipeline and the web app, the workflow
+that produces it, and the repository hygiene that keeps the free hosting inside
+its limits.
+
+WHY A SEPARATE SUITE: the failures here are different in kind. A model bug
+produces a wrong number. A deployment bug produces a page that is confidently
+out of date, an email that never arrives, or a squad shown to the public that
+was sold three gameweeks ago — which is exactly what this project had before
+these checks existed. Nothing crashes; it just quietly stops being true.
+
+Checks are grouped:
+    CONTRACT    the published JSON is complete, well-formed and internally sane
+    CONSISTENT  what was published matches what is in the database
+    HONESTY     predictions were logged before deadlines, not after
+    APP         the front end stays inside Streamlit's free-tier constraints
+    WORKFLOW    the schedule, permissions and ordering are correct
+    HYGIENE     nothing large or secret is committed
+
+Every check below is written so that it CAN fail. A check that compares a value
+to itself passes forever and tests nothing — this suite already caught two of
+those in qa.py, so each assertion here is anchored to an independent source.
+
+Usage:
+    python qa_deploy.py
+"""
+
+import json
+import re
+import sqlite3
+import sys
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
+
+ROOT = Path(__file__).parent
+DB_PATH = ROOT / "fpl.db"
+DATA = ROOT / "site" / "data"
+WORKFLOW = ROOT / ".github" / "workflows" / "fpl.yml"
+
+PASS, FAIL, WARN = "PASS", "FAIL", "WARN"
+results = []
+
+EXPECTED_FILES = ["meta", "squad", "recommendations", "captain",
+                  "accuracy", "season", "alerts", "notify"]
+
+SQUAD_SHAPE = {"GKP": 2, "DEF": 5, "MID": 5, "FWD": 3}
+SEVERITIES = {"CRITICAL", "WARNING", "INFO", "GOOD"}
+TAGS = {"SQUAD", "WATCH", "OWNED", "-"}
+
+# Streamlit Community Cloud caps memory at 1 GB. These must never appear in
+# the app's requirements or imports.
+BANNED_IN_APP = ["scikit-learn", "sklearn", "scipy", "sqlite3", "torch", "tensorflow"]
+
+
+def check(name, status, detail=""):
+    results.append((name, status, detail))
+    icon = {PASS: "[ok]  ", FAIL: "[FAIL]", WARN: "[warn]"}[status]
+    print(f"  {icon} {name}")
+    if detail:
+        print(f"         {detail}")
+
+
+def ok(name, condition, detail=""):
+    check(name, PASS if condition else FAIL, detail)
+    return condition
+
+
+def load(name):
+    path = DATA / f"{name}.json"
+    if not path.exists():
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def parse_iso(s):
+    if not s:
+        return None
+    try:
+        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+# ------------------------------------------------------------- CONTRACT
+
+def qa_contract():
+    print("\nPUBLISHED DATA CONTRACT")
+
+    missing = [n for n in EXPECTED_FILES if not (DATA / f"{n}.json").exists()]
+    if not ok("all expected files published", not missing,
+              f"missing: {missing}" if missing else f"{len(EXPECTED_FILES)} files"):
+        return None
+
+    # Valid UTF-8 JSON. Windows defaults to cp1252, which cannot encode the
+    # accented names in this data and truncates the file mid-write.
+    bad = []
+    for n in EXPECTED_FILES:
+        try:
+            with open(DATA / f"{n}.json", encoding="utf-8") as fh:
+                json.load(fh)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            bad.append(f"{n}: {e}")
+    ok("every file is valid UTF-8 JSON", not bad, "; ".join(bad))
+
+    meta = load("meta")
+    required = ["generated_at", "snapshot_id", "next_gw", "deadline",
+                "hours_to_deadline", "row_counts"]
+    absent = [k for k in required if k not in meta]
+    ok("meta has all required keys", not absent, f"missing: {absent}" if absent else "")
+
+    gen = parse_iso(meta.get("generated_at"))
+    ok("generated_at parses as a datetime", gen is not None, str(meta.get("generated_at")))
+    if gen:
+        ok("generated_at is not in the future",
+           gen <= datetime.now(timezone.utc) + timedelta(minutes=5),
+           f"generated {gen.isoformat()}")
+
+    dl = parse_iso(meta.get("deadline"))
+    ok("deadline parses as a datetime", dl is not None, str(meta.get("deadline")))
+
+    # hours_to_deadline must agree with the two timestamps it was derived from.
+    # Anchored to deadline and generated_at independently, so a hardcoded or
+    # stale value fails rather than passing trivially.
+    if dl and gen and meta.get("hours_to_deadline") is not None:
+        expected = (dl - gen).total_seconds() / 3600
+        drift = abs(expected - meta["hours_to_deadline"])
+        ok("hours_to_deadline matches deadline minus generated_at", drift < 0.05,
+           f"stated {meta['hours_to_deadline']:.2f}h, derived {expected:.2f}h")
+
+    total_kb = sum((DATA / f"{n}.json").stat().st_size for n in EXPECTED_FILES) / 1024
+    # These files are committed twice a day forever. At 2 MB a commit that is
+    # ~1.4 GB of git history per year, which defeats the point of the split.
+    check("published payload is small enough to commit twice daily",
+          PASS if total_kb < 512 else (WARN if total_kb < 2048 else FAIL),
+          f"{total_kb:.0f} KB across {len(EXPECTED_FILES)} files")
+
+    return meta
+
+
+def qa_squad():
+    print("\nSQUAD")
+    squad = load("squad")
+    if not ok("squad.json has players", squad and squad.get("squad")):
+        return None
+    players = squad["squad"]
+
+    ok("squad has exactly 15 players", len(players) == 15, f"{len(players)} players")
+
+    shape = {}
+    for p in players:
+        shape[p["position"]] = shape.get(p["position"], 0) + 1
+    ok("squad is a legal FPL shape (2/5/5/3)", shape == SQUAD_SHAPE, str(shape))
+
+    ids = [p["element_id"] for p in players]
+    ok("every squad player has an element_id", all(i is not None for i in ids),
+       f"{sum(1 for i in ids if i is None)} unmatched")
+    ok("no duplicate players in squad", len(set(ids)) == len(ids),
+       f"{len(ids) - len(set(ids))} duplicates")
+
+    caps = [p for p in players if p["is_captain"]]
+    vices = [p for p in players if p["is_vice"]]
+    ok("exactly one captain", len(caps) == 1, f"{len(caps)} captains")
+    ok("at most one vice-captain", len(vices) <= 1, f"{len(vices)} vices")
+    if caps and vices:
+        ok("captain and vice are different players",
+           caps[0]["element_id"] != vices[0]["element_id"])
+
+    value = squad.get("squad_value")
+    # A squad outside this band means prices failed to join, not that a
+    # remarkable team was assembled.
+    ok("squad value is plausible", value is not None and 75 <= value <= 125,
+       f"£{value}m")
+
+    priced = [p for p in players if p["price"] is not None]
+    ok("every player joined to a price", len(priced) == len(players),
+       f"{len(players) - len(priced)} missing prices")
+
+    stated = round(sum(p["price"] for p in priced), 1)
+    ok("squad_value equals the sum of its prices", abs(stated - value) < 0.05,
+       f"stated {value}, summed {stated}")
+
+    return squad
+
+
+def qa_recommendations(meta):
+    print("\nRECOMMENDATIONS")
+    recs = load("recommendations")
+    if not ok("recommendations published", recs and recs.get("picks")):
+        return
+    picks = recs["picks"]
+
+    eps = [p["ep"] for p in picks]
+    ok("sorted by expected points, descending",
+       all(eps[i] >= eps[i + 1] for i in range(len(eps) - 1)))
+    ok("no negative expected points", all(e >= 0 for e in eps),
+       f"min {min(eps):.2f}")
+    ok("expected points are within a sane range", max(eps) < 25,
+       f"max {max(eps):.2f}")
+
+    ok("recommendations are for the upcoming gameweek",
+       recs.get("gameweek") == meta.get("next_gw"),
+       f"recs GW{recs.get('gameweek')} vs meta GW{meta.get('next_gw')}")
+
+    # A player the FPL API says is injured, suspended or unavailable must never
+    # be recommended, whatever the model thinks — the model sees form, not this
+    # morning's team news.
+    leaked = [p["name"] for p in picks
+              if p.get("status") in ("i", "s", "u") and p["ep"] > 0]
+    ok("no unavailable player carries a positive score", not leaked,
+       f"{leaked[:5]}" if leaked else "")
+
+    zero_chance = [p["name"] for p in picks
+                   if p.get("chance") == 0 and p["ep"] > 0]
+    ok("no 0%-chance player carries a positive score", not zero_chance,
+       f"{zero_chance[:5]}" if zero_chance else "")
+
+    ids = [p["element_id"] for p in picks]
+    ok("no duplicate players in recommendations", len(set(ids)) == len(ids))
+
+
+def qa_captain(squad):
+    print("\nCAPTAIN")
+    cap = load("captain")
+    if not ok("captain.json published", cap is not None):
+        return
+    if not cap.get("model_pick"):
+        check("model pick present", WARN, "no prediction available yet")
+        return
+
+    ranked = cap.get("ranked", [])
+    ok("model pick is the highest-scoring ranked player",
+       ranked and cap["model_pick"]["element_id"] == ranked[0]["element_id"],
+       f"pick {cap['model_pick']['name']}, top of list "
+       f"{ranked[0]['name'] if ranked else 'none'}")
+
+    ok("ranked list is sorted descending",
+       all(ranked[i]["ep"] >= ranked[i + 1]["ep"] for i in range(len(ranked) - 1)))
+
+    if squad:
+        squad_ids = {p["element_id"] for p in squad["squad"]}
+        ok("model pick is a player you actually own",
+           cap["model_pick"]["element_id"] in squad_ids,
+           cap["model_pick"]["name"])
+        ok("every ranked captain candidate is in the squad",
+           all(r["element_id"] in squad_ids for r in ranked))
+
+        recorded = [p["name"] for p in squad["squad"] if p["is_captain"]]
+        if recorded:
+            ok("your_pick matches the captain flagged in the squad",
+               cap.get("your_pick") == recorded[0],
+               f"captain.json says {cap.get('your_pick')}, squad says {recorded[0]}")
+            # `agrees` must be derived, not asserted.
+            ok("`agrees` is computed correctly",
+               cap.get("agrees") == (cap["model_pick"]["name"] == recorded[0]),
+               f"agrees={cap.get('agrees')}")
+
+
+def qa_alerts_and_notify(meta, squad):
+    print("\nALERTS AND NOTIFICATION")
+    alerts = load("alerts")
+    notify = load("notify")
+
+    if alerts and alerts.get("available"):
+        rows = alerts.get("alerts", [])
+        ok("every alert has a known severity",
+           all(a["severity"] in SEVERITIES for a in rows))
+        ok("every alert has a known tag", all(a["tag"] in TAGS for a in rows))
+
+        # Squad players must sort above everyone else, or the one alert that
+        # matters is buried under 17 irrelevant ones.
+        order = [a["tag"] for a in rows]
+        rank = {"SQUAD": 0, "WATCH": 1, "OWNED": 2, "-": 3}
+        ok("alerts are ordered by priority",
+           all(rank[order[i]] <= rank[order[i + 1]] for i in range(len(order) - 1)),
+           " ".join(order[:8]))
+
+        urgent = alerts.get("urgent", [])
+        derived = [a for a in rows if a["tag"] in ("SQUAD", "WATCH")
+                   and a["severity"] in ("CRITICAL", "WARNING")]
+        ok("`urgent` matches its own definition", len(urgent) == len(derived),
+           f"{len(urgent)} listed, {len(derived)} derived")
+
+        if squad:
+            squad_ids = {p["element_id"] for p in squad["squad"]}
+            mistagged = [a["name"] for a in rows
+                         if a["tag"] == "SQUAD" and a["element_id"] not in squad_ids]
+            # This is the check that would have caught the sold-players bug.
+            ok("no alert is tagged SQUAD for a player you do not own",
+               not mistagged, f"{mistagged}" if mistagged else "")
+    else:
+        check("alerts available", WARN, "not enough snapshots to compare")
+
+    if not ok("notify.json published", notify is not None):
+        return
+
+    ok("should_email is a boolean", isinstance(notify.get("should_email"), bool),
+       repr(notify.get("should_email")))
+    if notify.get("should_email"):
+        ok("an email that will send has a reason", bool(notify.get("reasons")))
+        ok("an email that will send has a body", bool(notify.get("body", "").strip()))
+    ok("subject fits in an email header",
+       0 < len(notify.get("subject", "")) <= 180,
+       f"{len(notify.get('subject', ''))} chars")
+
+    # Nothing personal should end up in a file committed to a public repo.
+    blob = json.dumps([alerts, notify, load("meta"), load("squad")], default=str)
+    leaks = re.findall(r"[\w.+-]+@[\w-]+\.[\w.]+", blob)
+    leaks = [l for l in leaks if not l.endswith("noreply.github.com")]
+    ok("no email addresses in published data", not leaks, f"{set(leaks)}" if leaks else "")
+    ok("no obvious credentials in published data",
+       not re.search(r"(?i)(api[_-]?key|password|secret|bearer)\s*[\"':=]\s*\S", blob))
+
+
+# ----------------------------------------------------------- CONSISTENT
+
+def qa_consistency(conn, meta, squad):
+    print("\nCONSISTENCY WITH THE DATABASE")
+
+    db_snap = conn.execute("SELECT MAX(id) FROM snapshots").fetchone()[0]
+    ok("published snapshot is the newest in the database",
+       meta.get("snapshot_id") == db_snap,
+       f"published #{meta.get('snapshot_id')}, database #{db_snap}")
+
+    db_gw = conn.execute(
+        "SELECT next_gw FROM snapshots ORDER BY id DESC LIMIT 1").fetchone()[0]
+    ok("published next_gw matches the database", meta.get("next_gw") == db_gw,
+       f"published GW{meta.get('next_gw')}, database GW{db_gw}")
+
+    for table, published in meta.get("row_counts", {}).items():
+        actual = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        if actual != published:
+            check(f"row_counts.{table} matches the database", FAIL,
+                  f"published {published}, actual {actual}")
+            break
+    else:
+        check("row_counts match the database", PASS,
+              f"{len(meta.get('row_counts', {}))} tables verified")
+
+    if squad:
+        db_ids = {r[0] for r in conn.execute(
+            "SELECT element_id FROM my_squad WHERE gameweek ="
+            " (SELECT MAX(gameweek) FROM my_squad)")}
+        pub_ids = {p["element_id"] for p in squad["squad"]}
+        ok("published squad matches my_squad exactly", db_ids == pub_ids,
+           f"only in DB {db_ids - pub_ids}, only published {pub_ids - db_ids}")
+
+        # Expected points must be the values that were logged, not recomputed.
+        mismatched = []
+        for p in squad["squad"]:
+            row = conn.execute(
+                "SELECT predicted FROM predictions WHERE element_id=? AND gameweek=?"
+                " AND model='two_stage_ml'", (p["element_id"], meta["next_gw"])
+            ).fetchone()
+            if row and p["ep"] is not None and abs(round(row[0], 2) - p["ep"]) > 0.005:
+                mismatched.append(p["name"])
+        ok("published expected points match the logged predictions",
+           not mismatched, f"{mismatched[:5]}" if mismatched else "")
+
+
+def qa_honesty(conn, meta):
+    print("\nHONESTY OF THE PREDICTION LOG")
+
+    gw = meta.get("next_gw")
+    dl = parse_iso(meta.get("deadline"))
+
+    rows = conn.execute(
+        "SELECT made_at FROM predictions WHERE gameweek=? AND model='two_stage_ml'",
+        (gw,)).fetchall()
+    if not rows:
+        check("predictions logged for the upcoming gameweek", WARN, f"none for GW{gw}")
+        return
+
+    ok("predictions logged for the upcoming gameweek", True, f"{len(rows)} rows")
+
+    # The single most important property of this project: a prediction written
+    # after kick-off is not a prediction. If this ever fails, every accuracy
+    # number in the app is worthless.
+    if dl:
+        late = [r[0] for r in rows if (parse_iso(r[0]) or dl) > dl]
+        ok("every prediction was made before its deadline", not late,
+           f"{len(late)} logged after the deadline")
+
+    scored = conn.execute(
+        """SELECT COUNT(*) FROM predictions p JOIN player_gw a
+             ON a.element_id = p.element_id AND a.gameweek = p.gameweek""").fetchone()[0]
+    acc = load("accuracy")
+    if acc and acc.get("scored"):
+        ok("accuracy figures are non-negative and finite",
+           all(s["mae"] >= 0 and s["mae"] < 100 for s in acc["scored"]))
+        ok("scored gameweeks have a positive sample size",
+           all(s["n"] > 0 for s in acc["scored"]))
+    else:
+        check("accuracy scored", WARN,
+              f"nothing scored yet ({scored} prediction/result joins exist)")
+
+
+# ------------------------------------------------------------------ APP
+
+def qa_app():
+    print("\nSTREAMLIT APP CONSTRAINTS")
+
+    app = ROOT / "app.py"
+    if not ok("app.py exists", app.exists()):
+        return
+    source = app.read_text(encoding="utf-8")
+
+    try:
+        compile(source, "app.py", "exec")
+        check("app.py compiles", PASS)
+    except SyntaxError as e:
+        check("app.py compiles", FAIL, str(e))
+
+    # Comments must be stripped before scanning. requirements.txt explains
+    # *why* scikit-learn is banned, and the first version of this check read
+    # that explanation as a violation.
+    def declared(path):
+        return "\n".join(
+            l.split("#")[0].strip().lower()
+            for l in path.read_text(encoding="utf-8").splitlines()
+            if l.split("#")[0].strip()
+        )
+
+    reqs = declared(ROOT / "requirements.txt")
+    heavy = [b for b in ("scikit-learn", "scipy", "torch", "tensorflow") if b in reqs]
+    ok("app requirements exclude heavy ML libraries", not heavy,
+       f"found {heavy} — the free tier caps memory at 1 GB")
+    ok("app requirements include streamlit", "streamlit" in reqs)
+
+    imports = re.findall(r"^\s*(?:import|from)\s+([\w.]+)", source, re.M)
+    banned = [i for i in imports if i.split(".")[0] in
+              ("sklearn", "scipy", "sqlite3", "torch", "tensorflow")]
+    ok("app.py imports nothing heavy", not banned, f"imports {banned}")
+
+    # The app must only read files the pipeline actually writes.
+    loaded = set(re.findall(r'load\("(\w+)"\)', source))
+    unknown = loaded - set(EXPECTED_FILES)
+    ok("app only loads files the publisher produces", not unknown,
+       f"app reads {unknown} which publish.py never writes")
+
+    ok("app handles missing data instead of crashing",
+       "st.stop()" in source and "is None" in source)
+
+    pipeline_reqs = (ROOT / "requirements-pipeline.txt")
+    ok("pipeline requirements exist separately", pipeline_reqs.exists())
+    if pipeline_reqs.exists():
+        pr = declared(pipeline_reqs)
+        ok("pipeline requirements include scikit-learn", "scikit-learn" in pr)
+        ok("pipeline requirements include scipy for the optimiser", "scipy" in pr)
+
+
+# ------------------------------------------------------------- WORKFLOW
+
+def qa_workflow():
+    print("\nGITHUB ACTIONS WORKFLOW")
+
+    if not ok("workflow file exists", WORKFLOW.exists(), str(WORKFLOW)):
+        return
+    raw = WORKFLOW.read_text(encoding="utf-8")
+
+    try:
+        import yaml
+    except ImportError:
+        check("workflow YAML parses", WARN, "pyyaml not installed; skipped")
+        return
+
+    try:
+        wf = yaml.safe_load(raw)
+        check("workflow YAML parses", PASS)
+    except yaml.YAMLError as e:
+        check("workflow YAML parses", FAIL, str(e))
+        return
+
+    # PyYAML resolves a bare `on:` key to the boolean True — the well-known
+    # "Norway problem". Accept either form rather than reporting a false failure.
+    triggers = wf.get("on", wf.get(True, {})) or {}
+    ok("workflow runs on a schedule", "schedule" in triggers,
+       f"triggers: {list(triggers)}")
+    ok("workflow can be run manually before a deadline",
+       "workflow_dispatch" in triggers)
+
+    crons = [c.get("cron") for c in triggers.get("schedule", [])]
+    ok("at least two runs a day", len(crons) >= 2, f"{crons}")
+
+    ok("workflow may write to the repository",
+       wf.get("permissions", {}).get("contents") == "write",
+       str(wf.get("permissions")))
+
+    conc = wf.get("concurrency", {})
+    ok("concurrent runs cannot race on the database",
+       conc.get("group") and conc.get("cancel-in-progress") is False,
+       str(conc))
+
+    job = next(iter(wf.get("jobs", {}).values()), {})
+    steps = job.get("steps", [])
+    names = [s.get("name", s.get("uses", "")) for s in steps]
+
+    ok("workflow has a timeout", "timeout-minutes" in job,
+       f"{job.get('timeout-minutes')} minutes")
+
+    def index_of(fragment):
+        for i, n in enumerate(names):
+            if fragment.lower() in n.lower():
+                return i
+        return -1
+
+    qa_i, commit_i, email_i = index_of("QA"), index_of("Commit"), index_of("Email")
+    ok("a QA gate exists in the workflow", qa_i >= 0)
+    # Ordering is the whole point of the gate: bad data must never be committed
+    # to a public page or emailed out.
+    ok("QA runs before anything is committed", 0 <= qa_i < commit_i,
+       f"QA at step {qa_i}, commit at step {commit_i}")
+    ok("QA runs before anything is emailed", 0 <= qa_i < email_i,
+       f"QA at step {qa_i}, email at step {email_i}")
+
+    ok("qa.py is invoked with --all", "qa.py --all" in raw,
+       "bare `python qa.py` only prints its docstring and exits 0")
+
+    # "Store database" is a substring of "Restore database from release", so a
+    # loose match here silently compared the restore step against itself and
+    # reported a failure that did not exist. Anchor on the full step name.
+    ok("the database is restored before use",
+       0 <= index_of("Restore database") < index_of("Take snapshot"))
+    ok("the database is stored back after the run",
+       index_of("Store database back") > index_of("Publish JSON"))
+
+    ok("no hardcoded credentials in the workflow",
+       not re.search(r"(?i)(password|token)\s*:\s*['\"]?[A-Za-z0-9_\-]{16,}", raw))
+    ok("mail credentials come from secrets",
+       "secrets.MAIL_PASSWORD" in raw and "MAIL_PASSWORD:" in raw)
+    ok("email step is skipped when secrets are absent",
+       "env.MAIL_USERNAME != ''" in raw)
+
+
+# -------------------------------------------------------------- HYGIENE
+
+def qa_hygiene():
+    print("\nREPOSITORY HYGIENE")
+
+    gi = (ROOT / ".gitignore")
+    if not ok(".gitignore exists", gi.exists()):
+        return
+    ignored = gi.read_text(encoding="utf-8")
+
+    ok("fpl.db is not committed", "fpl.db" in ignored)
+    ok(".env is not committed", ".env" in ignored)
+
+    # The whole architecture depends on site/data being tracked. If someone
+    # ever adds it to .gitignore the app silently freezes at its last state.
+    lines = [l.strip() for l in ignored.splitlines()
+             if l.strip() and not l.strip().startswith("#")]
+    blocked = [l for l in lines if l.rstrip("/") in ("site", "site/data", "*.json")]
+    ok("site/data is NOT gitignored", not blocked,
+       f"{blocked} would stop the app ever updating")
+
+    db = DB_PATH
+    if db.exists():
+        mb = db.stat().st_size / 1e6
+        check("database size is under control",
+              PASS if mb < 100 else WARN, f"{mb:.1f} MB")
+
+    stray = [p.name for p in ROOT.glob("*.env")] + \
+            [p.name for p in ROOT.glob("*.key")]
+    ok("no stray secret files in the project root", not stray, f"{stray}")
+
+    ok("README documents the deployment",
+       "streamlit" in (ROOT / "README.md").read_text(encoding="utf-8").lower())
+
+
+# --------------------------------------------------------------- report
+
+def summary():
+    n_fail = sum(1 for _, s, _ in results if s == FAIL)
+    n_warn = sum(1 for _, s, _ in results if s == WARN)
+    n_pass = sum(1 for _, s, _ in results if s == PASS)
+
+    print("\n" + "=" * 62)
+    print(f"  {n_pass} passed, {n_warn} warnings, {n_fail} failures "
+          f"({len(results)} checks)")
+    if n_fail:
+        print("\n  FAILURES:")
+        for name, s, d in results:
+            if s == FAIL:
+                print(f"    - {name}: {d}")
+    if n_warn:
+        print("\n  WARNINGS:")
+        for name, s, d in results:
+            if s == WARN:
+                print(f"    - {name}: {d}")
+    print("=" * 62)
+    return n_fail
+
+
+def main():
+    if not DATA.exists():
+        print(f"  Nothing published yet at {DATA}. Run:  python publish.py")
+        sys.exit(1)
+
+    meta = qa_contract()
+    if meta is None:
+        sys.exit(1 if summary() else 0)
+
+    squad = qa_squad()
+    qa_recommendations(meta)
+    qa_captain(squad)
+    qa_alerts_and_notify(meta, squad)
+
+    if DB_PATH.exists():
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            qa_consistency(conn, meta, squad)
+            qa_honesty(conn, meta)
+        finally:
+            conn.close()
+    else:
+        check("database available for consistency checks", WARN, "fpl.db not found")
+
+    qa_app()
+    qa_workflow()
+    qa_hygiene()
+
+    sys.exit(1 if summary() else 0)
+
+
+if __name__ == "__main__":
+    main()

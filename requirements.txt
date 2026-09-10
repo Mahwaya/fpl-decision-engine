@@ -1,0 +1,11 @@
+# Streamlit Community Cloud installs THIS file automatically.
+#
+# Keep it to what app.py actually imports. The app reads published JSON and
+# nothing else — no database, no model, no training — so scikit-learn and scipy
+# must NOT appear here. Adding them would push a 1 GB-capped instance toward
+# its memory limit and turn a seconds-long cold start into a minutes-long one.
+#
+# Pipeline dependencies live in requirements-pipeline.txt and are installed
+# only by GitHub Actions.
+streamlit>=1.40,<2
+pandas>=2.2,<3

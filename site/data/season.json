@@ -1,0 +1,47 @@
+{
+ "gameweeks": [
+  {
+   "gameweek": 1,
+   "points": 53,
+   "transfers": 0,
+   "formation": "3-5-2",
+   "decided_by": "gut",
+   "captain": "João Pedro",
+   "captain_points": 22,
+   "played": true
+  },
+  {
+   "gameweek": 2,
+   "points": 79,
+   "transfers": 1,
+   "formation": "3-5-2",
+   "decided_by": "gut",
+   "captain": "João Pedro",
+   "captain_points": 18,
+   "played": true
+  },
+  {
+   "gameweek": 3,
+   "points": 48,
+   "transfers": 1,
+   "formation": "4-4-2",
+   "decided_by": "gut",
+   "captain": "B.Fernandes",
+   "captain_points": 4,
+   "played": true
+  },
+  {
+   "gameweek": 4,
+   "points": null,
+   "transfers": 0,
+   "formation": null,
+   "decided_by": "wildcard",
+   "captain": "Palmer",
+   "captain_points": null,
+   "played": false
+  }
+ ],
+ "total_points": 180,
+ "played": 3,
+ "average": 60.0
+}
