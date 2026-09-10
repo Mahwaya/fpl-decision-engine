@@ -90,6 +90,14 @@ jobs:
       - name: Take snapshot
         run: python fpl_collect.py
 
+      # Your squad is version-controlled inside record_my_team.py, not in the
+      # database, so a rebuilt database has no my_squad at all — which is how
+      # the first cloud run of the alerter died. Replaying it here makes the
+      # database reproducible from the repo alone, and must come AFTER the
+      # snapshot because element ids are matched against it.
+      - name: Record squad
+        run: python record_my_team.py
+
       - name: Backfill finished gameweek results
         run: python predict.py --backfill
 

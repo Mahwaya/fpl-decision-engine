@@ -102,6 +102,12 @@ SEV_RANK = {"CRITICAL": 0, "WARNING": 1, "INFO": 2, "GOOD": 3}
 TAG_RANK = {"SQUAD": 0, "WATCH": 1, "OWNED": 2, "-": 3}
 
 
+def table_exists(conn, name):
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (name,)
+    ).fetchone() is not None
+
+
 def collect(conn, hours=None):
     """
     Diff two snapshots and return the result as data, not printed text.
@@ -123,9 +129,19 @@ def collect(conn, hours=None):
         "       (SELECT taken_at FROM snapshots WHERE id=?)", (prev, latest)
     ).fetchone()
 
-    squad = {r[0] for r in conn.execute(
-        "SELECT DISTINCT element_id FROM my_squad WHERE gameweek ="
-        " (SELECT MAX(gameweek) FROM my_squad) AND element_id IS NOT NULL")}
+    # A database rebuilt from scratch — the cloud runner does exactly this when
+    # the stored copy is missing — has no my_squad until record_my_team.py has
+    # run. Degrade to "no squad known" and SAY SO, rather than crashing the
+    # scheduled run or, worse, quietly reporting zero squad alerts as if all
+    # were well.
+    if not table_exists(conn, "my_squad"):
+        print("  NOTE: my_squad does not exist — no [SQUAD] tagging this run."
+              " Run record_my_team.py to populate it.")
+        squad = set()
+    else:
+        squad = {r[0] for r in conn.execute(
+            "SELECT DISTINCT element_id FROM my_squad WHERE gameweek ="
+            " (SELECT MAX(gameweek) FROM my_squad) AND element_id IS NOT NULL")}
     watch = {r[0]: r[1] for r in conn.execute("SELECT element_id, label FROM watchlist")}
 
     rows = conn.execute(
