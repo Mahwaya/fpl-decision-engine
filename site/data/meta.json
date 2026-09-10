@@ -1,18 +1,19 @@
 {
- "generated_at": "2026-09-10T22:39:41.459315+00:00",
- "snapshot_id": 21,
- "snapshot_taken_at": "2026-09-10T22:39:31.008434+00:00",
+ "generated_at": "2026-09-10T22:41:10.765115+00:00",
+ "published_by": "local",
+ "snapshot_id": 20,
+ "snapshot_taken_at": "2026-09-10T20:42:26.497576+00:00",
  "current_gw": 3,
  "next_gw": 4,
  "deadline": "2026-09-12T12:30:00Z",
- "hours_to_deadline": 37.84,
+ "hours_to_deadline": 37.81,
  "deadline_passed": false,
  "row_counts": {
   "history": 113582,
   "player_gw": 1890,
-  "predictions": 1963,
-  "players": 13737,
-  "snapshots": 21,
+  "predictions": 1962,
+  "players": 13082,
+  "snapshots": 20,
   "my_squad": 60,
   "watchlist": 15
  }

@@ -31,6 +31,7 @@ Usage:
 """
 
 import json
+import os
 import sqlite3
 import sys
 from datetime import datetime, timezone
@@ -95,6 +96,12 @@ def build_meta(conn):
 
     return {
         "generated_at": utcnow().isoformat(),
+        # Which database produced these files. After `git pull`, a local
+        # checkout holds JSON published by the cloud alongside a local fpl.db
+        # that is a different database entirely — the consistency checks in
+        # qa_deploy.py must be able to tell "published elsewhere" apart from
+        # "genuinely inconsistent", or they cry wolf on every pull.
+        "published_by": "github-actions" if os.environ.get("GITHUB_ACTIONS") else "local",
         "snapshot_id": snap,
         "snapshot_taken_at": taken_at,
         "current_gw": cur_gw,

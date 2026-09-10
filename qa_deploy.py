@@ -29,6 +29,7 @@ Usage:
 """
 
 import json
+import os
 import re
 import sqlite3
 import sys
@@ -319,6 +320,20 @@ def qa_alerts_and_notify(meta, squad):
 
 def qa_consistency(conn, meta, squad):
     print("\nCONSISTENCY WITH THE DATABASE")
+
+    # These checks only mean something when the JSON and the database came from
+    # the same run. On a developer machine after `git pull`, site/data holds
+    # what the cloud published while fpl.db is a different database — every
+    # check below would fail for a reason that is not a defect. Detect that and
+    # warn instead, rather than either crying wolf or silently weakening the
+    # gate in CI, where both always come from the same run.
+    here = "github-actions" if os.environ.get("GITHUB_ACTIONS") else "local"
+    published_by = meta.get("published_by")
+    if published_by and published_by != here:
+        check("published data was produced by this environment", WARN,
+              f"published by {published_by}, checking from {here} — "
+              f"consistency skipped; run `python publish.py` to compare locally")
+        return
 
     db_snap = conn.execute("SELECT MAX(id) FROM snapshots").fetchone()[0]
     ok("published snapshot is the newest in the database",
