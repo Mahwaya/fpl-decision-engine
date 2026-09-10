@@ -516,8 +516,42 @@ def qa_workflow():
     ok("QA runs before anything is emailed", 0 <= qa_i < email_i,
        f"QA at step {qa_i}, email at step {email_i}")
 
-    ok("qa.py is invoked with --all", "qa.py --all" in raw,
-       "bare `python qa.py` only prints its docstring and exits 0")
+    # ------------------------------------------------------------------
+    # Most scripts here print their docstring and exit 0 when given no mode
+    # flag. Invoking one bare from the workflow therefore looks like success
+    # while doing nothing at all — `python backfill_history.py` loaded no
+    # history, and the run only broke four steps later with "Training on 0
+    # historical rows". A green step that did nothing is the worst kind of
+    # failure, so every invocation is checked against the script's own flags.
+    # ------------------------------------------------------------------
+    # Comments must be stripped first. The workflow *explains* this very trap
+    # in a comment containing a bare `python backfill_history.py`, and the
+    # first version of this check flagged that prose as a real invocation.
+    commands = "\n".join(
+        l.split("#")[0] for l in raw.splitlines() if l.split("#")[0].strip()
+    )
+    invocations = re.findall(r"python\s+(\w+\.py)([^\n|;&]*)", commands)
+    noop_risk = []
+    for script, args in invocations:
+        path = ROOT / script
+        if not path.exists():
+            noop_risk.append(f"{script} (missing)")
+            continue
+        src = path.read_text(encoding="utf-8")
+        main_body = src.split("def main(", 1)[-1]
+        # Does this script no-op without a flag?
+        if "print(__doc__)" not in main_body:
+            continue
+        flags = set(re.findall(r'"(--[a-z_]+)"\s+in\s+sys\.argv', main_body))
+        if flags and not any(f in args for f in flags):
+            noop_risk.append(f"{script} (needs one of {sorted(flags)})")
+
+    ok("no workflow step invokes a script that would silently do nothing",
+       not noop_risk, "; ".join(noop_risk))
+
+    ok("bootstrap asserts it actually loaded history",
+       "history rows after bootstrap" in raw or "COUNT(*) FROM history" in raw,
+       "a bootstrap that loads nothing must fail loudly, not four steps later")
 
     # "Store database" is a substring of "Restore database from release", so a
     # loose match here silently compared the restore step against itself and

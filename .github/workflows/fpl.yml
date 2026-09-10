@@ -69,9 +69,23 @@ jobs:
             echo "No stored database found — this run will bootstrap one."
           fi
 
+      # Most scripts in this repo print their docstring and exit 0 when given
+      # no mode flag. `python backfill_history.py` therefore "succeeded" while
+      # loading nothing, and the failure only surfaced four steps later as
+      # "Training on 0 historical rows". The flag is required, and the row
+      # count is asserted rather than assumed.
       - name: Bootstrap history (first run only)
         if: steps.restore.outputs.restored == 'false'
-        run: python backfill_history.py
+        run: |
+          python backfill_history.py --load
+          python - <<'PY'
+          import sqlite3, sys
+          n = sqlite3.connect("fpl.db").execute(
+              "SELECT COUNT(*) FROM history").fetchone()[0]
+          print(f"history rows after bootstrap: {n:,}")
+          if n < 100_000:
+              sys.exit("Bootstrap produced too few rows — refusing to continue.")
+          PY
 
       - name: Take snapshot
         run: python fpl_collect.py
