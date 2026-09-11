@@ -1,8 +1,6 @@
 {
- "should_email": true,
- "reasons": [
-  "1 squad/watchlist change(s)"
- ],
- "subject": "FPL: 1 squad/watchlist change(s)",
- "body": "AVAILABILITY — players you own or watch:\n  [SQUAD] WARNING  Gakpo (MID)  worsened 100% -> 75% (Thigh injury - 75% chance of playing)\n\nFLAGGED IN YOUR SQUAD:\n  Gakpo (MID) chance 75% — Thigh injury - 75% chance of playing\n\nCAPTAIN — model says B.Fernandes (6.83 xPts).\n  You have Palmer recorded. Model disagrees.\n\nSnapshot #22 at 2026-09-10T22:42:35.098019+00:00"
+ "should_email": false,
+ "reasons": [],
+ "subject": "FPL: nothing urgent",
+ "body": "FLAGGED IN YOUR SQUAD:\n  Gakpo (MID) chance 75% — Thigh injury - 75% chance of playing\n\nCAPTAIN — model says B.Fernandes (6.83 xPts).\n  You have Palmer recorded. Model disagrees.\n\nSnapshot #23 at 2026-09-11T10:06:37.534070+00:00"
 }
