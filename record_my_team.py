@@ -118,7 +118,13 @@ GAMEWEEKS = {
         "decided_by": "gut+model",
         "squad": [
             # name            pts  started captain vice
-            ("Horníček",     None, True,  False, False),
+            #
+            # Keeper switched Horníček -> Pickford on 2026-09-11 after the
+            # comparison: same fixture difficulty, so the fixture overlay does
+            # not move it, and the model had Pickford ahead 3.38 to 3.09. The
+            # only selection disagreement of the gameweek, now resolved in the
+            # engine's favour.
+            ("Pickford",     None, True,  False, False),
             ("Rúben",        None, True,  False, False),
             ("Mitchell",     None, True,  False, False),
             ("Hall",         None, True,  False, False),
@@ -130,7 +136,7 @@ GAMEWEEKS = {
             ("João Pedro",   None, True,  False, True),    # vice
             ("Isak",         None, True,  False, False),
             # bench, in order
-            ("Pickford",     None, False, False, False),
+            ("Horníček",     None, False, False, False),
             ("Barry",        None, False, False, False),
             ("Thomas",       None, False, False, False),
             ("Davis",        None, False, False, False),

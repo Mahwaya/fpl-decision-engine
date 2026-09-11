@@ -33,9 +33,9 @@
   {
    "gameweek": 4,
    "points": null,
-   "transfers": 0,
-   "formation": null,
-   "decided_by": "wildcard",
+   "transfers": 1,
+   "formation": "3-5-2",
+   "decided_by": "gut+model",
    "captain": "Palmer",
    "captain_points": null,
    "played": false
