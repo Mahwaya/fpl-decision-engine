@@ -14,7 +14,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.42,
+   "ep": 3.38,
    "flagged": false
   },
   {
@@ -30,23 +30,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.02,
-   "flagged": false
-  },
-  {
-   "name": "Hall",
-   "element_id": 449,
-   "position": "DEF",
-   "club": "NEW",
-   "price": 5.1,
-   "owned": 12.6,
-   "status": "a",
-   "chance": null,
-   "news": null,
-   "is_captain": false,
-   "is_vice": false,
-   "started": null,
-   "ep": 3.74,
+   "ep": 3.09,
    "flagged": false
   },
   {
@@ -62,7 +46,23 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.74,
+   "ep": 3.64,
+   "flagged": false
+  },
+  {
+   "name": "Hall",
+   "element_id": 449,
+   "position": "DEF",
+   "club": "NEW",
+   "price": 5.1,
+   "owned": 12.5,
+   "status": "a",
+   "chance": null,
+   "news": null,
+   "is_captain": false,
+   "is_vice": false,
+   "started": null,
+   "ep": 3.57,
    "flagged": false
   },
   {
@@ -78,7 +78,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.59,
+   "ep": 3.56,
    "flagged": false
   },
   {
@@ -94,7 +94,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.24,
+   "ep": 2.95,
    "flagged": false
   },
   {
@@ -110,7 +110,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 2.58,
+   "ep": 2.65,
    "flagged": false
   },
   {
@@ -119,14 +119,14 @@
    "position": "MID",
    "club": "MUN",
    "price": 12.0,
-   "owned": 44.6,
+   "owned": 44.8,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": true,
    "started": null,
-   "ep": 6.83,
+   "ep": 6.05,
    "flagged": false
   },
   {
@@ -135,14 +135,14 @@
    "position": "MID",
    "club": "CHE",
    "price": 9.7,
-   "owned": 24.5,
+   "owned": 24.2,
    "status": "a",
    "chance": 100,
    "news": null,
    "is_captain": true,
    "is_vice": false,
    "started": null,
-   "ep": 6.22,
+   "ep": 5.97,
    "flagged": false
   },
   {
@@ -151,14 +151,30 @@
    "position": "MID",
    "club": "CHE",
    "price": 7.6,
-   "owned": 30.9,
+   "owned": 30.6,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 5.18,
+   "ep": 5.0,
+   "flagged": false
+  },
+  {
+   "name": "Szoboszlai",
+   "element_id": 368,
+   "position": "MID",
+   "club": "LIV",
+   "price": 7.0,
+   "owned": 38.4,
+   "status": "a",
+   "chance": null,
+   "news": null,
+   "is_captain": false,
+   "is_vice": false,
+   "started": null,
+   "ep": 4.44,
    "flagged": false
   },
   {
@@ -174,24 +190,8 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 4.55,
+   "ep": 4.33,
    "flagged": true
-  },
-  {
-   "name": "Szoboszlai",
-   "element_id": 368,
-   "position": "MID",
-   "club": "LIV",
-   "price": 7.0,
-   "owned": 38.4,
-   "status": "a",
-   "chance": null,
-   "news": null,
-   "is_captain": false,
-   "is_vice": false,
-   "started": null,
-   "ep": 4.45,
-   "flagged": false
   },
   {
    "name": "Isak",
@@ -199,14 +199,14 @@
    "position": "FWD",
    "club": "LIV",
    "price": 9.1,
-   "owned": 21.9,
+   "owned": 21.7,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 6.28,
+   "ep": 5.83,
    "flagged": false
   },
   {
@@ -215,14 +215,14 @@
    "position": "FWD",
    "club": "CHE",
    "price": 7.7,
-   "owned": 72.9,
+   "owned": 72.8,
    "status": "a",
    "chance": null,
    "news": null,
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 4.86,
+   "ep": 4.52,
    "flagged": false
   },
   {
@@ -238,7 +238,7 @@
    "is_captain": false,
    "is_vice": false,
    "started": null,
-   "ep": 3.77,
+   "ep": 3.57,
    "flagged": false
   }
  ],

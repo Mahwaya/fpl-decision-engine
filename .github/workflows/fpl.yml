@@ -7,15 +7,22 @@ name: FPL pipeline
 # — collect, predict, alert, email — and commits a few hundred KB of JSON that
 # the web app simply renders.
 #
-# 06:00 UTC  catches overnight news and gives several hours' warning before a
+# 05:17 UTC  catches overnight news and gives several hours' warning before a
 #            Saturday 11:30/12:30 deadline.
-# 19:00 UTC  catches the afternoon press conferences, which is when most
+# 18:17 UTC  catches the afternoon press conferences, which is when most
 #            injury news actually lands.
+#
+# NOT ON THE HOUR, AND THIS WAS MEASURED. The first scheduled run used
+# `0 6 * * *` and GitHub delivered it at 10:06 UTC — four hours late. Shared
+# runners are heavily oversubscribed at :00, and GitHub's scheduler drops or
+# delays triggers under load. An odd minute is far less contended. The delay
+# is still best-effort, never guaranteed, which is why the email window below
+# is wide enough to absorb a late run.
 
 on:
   schedule:
-    - cron: '0 6 * * *'
-    - cron: '0 19 * * *'
+    - cron: '17 5 * * *'
+    - cron: '17 18 * * *'
   workflow_dispatch:          # lets you run it by hand before a deadline
 
 permissions:

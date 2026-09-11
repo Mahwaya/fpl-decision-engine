@@ -47,7 +47,14 @@ MODEL_NAME = "two_stage_ml"
 
 # Email when a squad/watchlist player changes badly, or when the deadline is
 # close enough that you still have time to act but might forget to look.
-DEADLINE_WARN_HOURS = 26
+#
+# 30, NOT 26, AND THE DIFFERENCE IS NOT ARBITRARY. At 26 the Friday-morning run
+# before the GW4 deadline measured 26.4 hours remaining and sent nothing — it
+# missed the window by 24 minutes, purely because GitHub had delivered the
+# trigger four hours late. The margin has to be wider than the scheduler's
+# jitter, or a late run silently becomes a missed alert on exactly the morning
+# it matters most.
+DEADLINE_WARN_HOURS = 30
 
 
 def utcnow():
