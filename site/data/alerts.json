@@ -1,15 +1,15 @@
 {
  "prev_snapshot": 16,
- "latest_snapshot": 26,
+ "latest_snapshot": 27,
  "prev_taken_at": "2026-09-09T19:00:06.562924+00:00",
- "latest_taken_at": "2026-09-11T19:42:08.983190+00:00",
+ "latest_taken_at": "2026-09-11T21:01:22.387299+00:00",
  "alerts": [
   {
    "element_id": 423,
    "name": "Shaw",
    "position": "DEF",
    "price": 4.4,
-   "owned": 12.7,
+   "owned": 12.6,
    "severity": "WARNING",
    "tag": "OWNED",
    "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
@@ -19,7 +19,7 @@
    "name": "Pedro Porro",
    "position": "DEF",
    "price": 5.5,
-   "owned": 11.3,
+   "owned": 11.2,
    "severity": "WARNING",
    "tag": "OWNED",
    "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
@@ -179,7 +179,7 @@
    "name": "Doku",
    "position": "MID",
    "price": 7.4,
-   "owned": 0.8,
+   "owned": 0.7,
    "severity": "WARNING",
    "tag": "-",
    "message": "new news: Calf injury - Expected back 20 Sep"
@@ -203,6 +203,26 @@
    "severity": "WARNING",
    "tag": "-",
    "message": "new news: Foot injury - Expected back 7 Nov"
+  },
+  {
+   "element_id": 63,
+   "name": "Milosavljević",
+   "position": "DEF",
+   "price": 5.0,
+   "owned": 0.0,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "new news: Thigh injury - Unknown return date"
+  },
+  {
+   "element_id": 77,
+   "name": "Adli",
+   "position": "MID",
+   "price": 4.9,
+   "owned": 0.0,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "new news: Calf injury - Unknown return date"
   },
   {
    "element_id": 121,
@@ -245,6 +265,16 @@
    "message": "improved 0% -> 50%"
   },
   {
+   "element_id": 239,
+   "name": "Garner",
+   "position": "MID",
+   "price": 6.0,
+   "owned": 0.1,
+   "severity": "GOOD",
+   "tag": "-",
+   "message": "cleared - news removed, fit again"
+  },
+  {
    "element_id": 285,
    "name": "McNair",
    "position": "DEF",
@@ -282,7 +312,7 @@
    "owned": 0.0,
    "severity": "GOOD",
    "tag": "-",
-   "message": "improved 0% -> 50%"
+   "message": "improved 0% -> 75%"
   }
  ],
  "price_moves": [
@@ -290,21 +320,21 @@
    "name": "Calafiori",
    "old": 5.7,
    "new": 5.8,
-   "owned": 48.7,
+   "owned": 48.8,
    "direction": "up"
   },
   {
    "name": "Palmer",
    "old": 9.6,
    "new": 9.7,
-   "owned": 25.7,
+   "owned": 25.9,
    "direction": "up"
   },
   {
    "name": "Ødegaard",
    "old": 6.6,
    "new": 6.7,
-   "owned": 16.9,
+   "owned": 17.1,
    "direction": "up"
   },
   {
@@ -339,7 +369,7 @@
    "name": "Hume",
    "old": 4.5,
    "new": 4.4,
-   "owned": 4.1,
+   "owned": 4.0,
    "direction": "down"
   },
   {
