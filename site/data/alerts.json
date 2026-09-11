@@ -1,15 +1,15 @@
 {
  "prev_snapshot": 16,
- "latest_snapshot": 24,
+ "latest_snapshot": 25,
  "prev_taken_at": "2026-09-09T19:00:06.562924+00:00",
- "latest_taken_at": "2026-09-11T10:11:42.973361+00:00",
+ "latest_taken_at": "2026-09-11T12:07:07.819113+00:00",
  "alerts": [
   {
    "element_id": 387,
    "name": "O'Reilly",
    "position": "DEF",
    "price": 6.4,
-   "owned": 14.0,
+   "owned": 13.9,
    "severity": "GOOD",
    "tag": "OWNED",
    "message": "cleared - news removed, fit again"
@@ -49,7 +49,7 @@
    "name": "Mosquera",
    "position": "DEF",
    "price": 5.4,
-   "owned": 3.1,
+   "owned": 3.0,
    "severity": "WARNING",
    "tag": "-",
    "message": "worsened 75% -> 50% (Muscular injury - 50% chance of playing)"
@@ -127,7 +127,7 @@
    "name": "Palmer",
    "old": 9.6,
    "new": 9.7,
-   "owned": 24.5,
+   "owned": 24.7,
    "direction": "up"
   },
   {
@@ -141,14 +141,14 @@
    "name": "Ødegaard",
    "old": 6.6,
    "new": 6.7,
-   "owned": 15.9,
+   "owned": 16.1,
    "direction": "up"
   },
   {
    "name": "O'Reilly",
    "old": 6.5,
    "new": 6.4,
-   "owned": 14.0,
+   "owned": 13.9,
    "direction": "down"
   },
   {
@@ -162,7 +162,7 @@
    "name": "Scott",
    "old": 6.0,
    "new": 6.1,
-   "owned": 5.1,
+   "owned": 5.2,
    "direction": "up"
   },
   {
