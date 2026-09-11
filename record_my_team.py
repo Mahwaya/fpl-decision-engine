@@ -91,7 +91,7 @@ GAMEWEEKS = {
             ("Mykolenko",       1, False, False, False),
         ],
     },
-    # ---- GW4: the post-wildcard squad. NOT YET PLAYED. --------------------
+    # ---- GW4: post-wildcard squad, XI SET, not yet played -----------------
     #
     # WHY THIS ENTRY EXISTS AT ALL, WITH NO POINTS IN IT: the wildcard was
     # played before GW4, replacing 10 of the 15 players above. Until this was
@@ -101,31 +101,39 @@ GAMEWEEKS = {
     # about Cash's muscular injury (sold) while filing Gakpo, an actual owned
     # player, under [WATCH].
     #
-    # The squad itself is fact and is recorded. The starting XI is NOT yet set,
-    # so `started` is left NULL rather than invented; the captaincy review in
-    # show() filters on started=1 and correctly skips this gameweek until the
-    # real result is backfilled after the deadline.
+    # Confirmed from the FPL app 2026-09-11, ~19h before the deadline:
+    # Gakpo -> Wirtz is DONE (Gakpo was a 75% thigh doubt; Wirtz is clean), the
+    # XI is picked in a 3-5-2, and PALMER IS CAPTAIN.
+    #
+    # `decided_by` is "gut+model" and the distinction matters for every future
+    # comparison. The 15 came from his own wildcard, made before this project
+    # existed. The Gakpo -> Wirtz swap was agreed jointly off the availability
+    # alert. The captaincy — the single biggest lever in FPL — was HIS call
+    # AGAINST the model, which ranked B.Fernandes ahead of Palmer. Scoring this
+    # gameweek therefore settles a real disagreement, not a formality.
     4: {
         "total_points": None,          # not played yet
-        "transfers": 0,                # wildcard: unlimited, no hits
-        "formation": None,             # XI not yet set
-        "decided_by": "wildcard",
+        "transfers": 1,                # Gakpo -> Wirtz; free, wildcard active
+        "formation": "3-5-2",
+        "decided_by": "gut+model",
         "squad": [
-            ("Pickford",     None, None, False, False),
-            ("Horníček",     None, None, False, False),
-            ("Thomas",       None, None, False, False),
-            ("Mitchell",     None, None, False, False),
-            ("Davis",        None, None, False, False),
-            ("Rúben",        None, None, False, False),
-            ("Hall",         None, None, False, False),
-            ("Rogers",       None, None, False, False),
-            ("Palmer",       None, None, True,  False),   # captain — Percival's call
-            ("Gakpo",        None, None, False, False),   # 50/50 fitness; Wirtz planned
-            ("Szoboszlai",   None, None, False, False),
-            ("B.Fernandes",  None, None, False, True),    # vice
-            ("João Pedro",   None, None, False, False),
-            ("Barry",        None, None, False, False),
-            ("Isak",         None, None, False, False),
+            # name            pts  started captain vice
+            ("Horníček",     None, True,  False, False),
+            ("Rúben",        None, True,  False, False),
+            ("Mitchell",     None, True,  False, False),
+            ("Hall",         None, True,  False, False),
+            ("Rogers",       None, True,  False, False),
+            ("Palmer",       None, True,  True,  False),   # captain — his call
+            ("B.Fernandes",  None, True,  False, False),   # model wanted him captain
+            ("Szoboszlai",   None, True,  False, False),
+            ("Wirtz",        None, True,  False, False),   # in for Gakpo
+            ("João Pedro",   None, True,  False, True),    # vice
+            ("Isak",         None, True,  False, False),
+            # bench, in order
+            ("Pickford",     None, False, False, False),
+            ("Barry",        None, False, False, False),
+            ("Thomas",       None, False, False, False),
+            ("Davis",        None, False, False, False),
         ],
     },
 }
@@ -170,7 +178,7 @@ POSITIONS = {
     # post-wildcard arrivals (GW4)
     "Pickford": "GKP", "Horníček": "GKP",
     "Thomas": "DEF", "Mitchell": "DEF", "Davis": "DEF", "Rúben": "DEF",
-    "Rogers": "MID", "Gakpo": "MID",
+    "Rogers": "MID", "Gakpo": "MID", "Wirtz": "MID",
     "Barry": "FWD", "Isak": "FWD",
 }
 
@@ -229,6 +237,12 @@ def record(conn):
             (gw, data["total_points"], data["transfers"], data["formation"],
              data.get("decided_by", "gut")),
         )
+        # Clear the gameweek before rewriting it. INSERT OR REPLACE is keyed on
+        # (gameweek, name), so a player REMOVED from the squad is not replaced
+        # by anything and simply survives — after the Gakpo -> Wirtz transfer
+        # that would have left a 16-man squad, quietly breaking the shape check
+        # and every "who do I own?" query downstream.
+        conn.execute("DELETE FROM my_squad WHERE gameweek = ?", (gw,))
         conn.executemany(
             "INSERT OR REPLACE INTO my_squad (gameweek, name, points, started, is_captain, is_vice)"
             " VALUES (?,?,?,?,?,?)",

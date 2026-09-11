@@ -124,6 +124,7 @@ are gone unless they were captured at the time. This is why collection is automa
 | `record_my_team.py` | Record actual squad + captaincy review | `--show` |
 | `alert.py` | Diff snapshots for team-news changes | `--check [--hours N]` `--watch-wildcard` `--watchlist` |
 | `opponent.py` | Opponent-strength features — **tested and rejected**, kept as a documented negative result | *(imported)* |
+| `compare.py` | **Engine vs gut scoreboard** — XI and captaincy, expected then actual | `--gw N` `--fdr` `--score` `--season` |
 | `publish.py` | Database → the small JSON files the web app reads | `--print` |
 | `app.py` | Streamlit front end; reads JSON only, no database, no model | `streamlit run app.py` |
 | `qa.py` | Modelling QA suite (33 checks) | `--all` |
