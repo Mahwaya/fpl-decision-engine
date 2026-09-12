@@ -1,15 +1,25 @@
 {
  "prev_snapshot": 22,
- "latest_snapshot": 28,
+ "latest_snapshot": 29,
  "prev_taken_at": "2026-09-10T22:42:35.098019+00:00",
- "latest_taken_at": "2026-09-12T09:21:33.870343+00:00",
+ "latest_taken_at": "2026-09-12T20:37:58.031880+00:00",
  "alerts": [
+  {
+   "element_id": 367,
+   "name": "Gakpo",
+   "position": "MID",
+   "price": 7.2,
+   "owned": 12.2,
+   "severity": "GOOD",
+   "tag": "WATCH",
+   "message": "cleared - news removed, fit again"
+  },
   {
    "element_id": 423,
    "name": "Shaw",
    "position": "DEF",
    "price": 4.4,
-   "owned": 11.9,
+   "owned": 11.7,
    "severity": "WARNING",
    "tag": "OWNED",
    "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
@@ -19,10 +29,20 @@
    "name": "Pedro Porro",
    "position": "DEF",
    "price": 5.5,
-   "owned": 10.8,
+   "owned": 10.5,
    "severity": "WARNING",
    "tag": "OWNED",
    "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
+  },
+  {
+   "element_id": 586,
+   "name": "Mendy",
+   "position": "DEF",
+   "price": 4.1,
+   "owned": 8.1,
+   "severity": "WARNING",
+   "tag": "OWNED",
+   "message": "worsened 100% -> 50% (Concussion - 50% chance of playing)"
   },
   {
    "element_id": 387,
@@ -33,6 +53,16 @@
    "severity": "GOOD",
    "tag": "OWNED",
    "message": "cleared - news removed, fit again"
+  },
+  {
+   "element_id": 198,
+   "name": "Henderson",
+   "position": "GKP",
+   "price": 5.0,
+   "owned": 1.9,
+   "severity": "CRITICAL",
+   "tag": "-",
+   "message": "RULED OUT (Foot injury - Expected back 11 Oct)"
   },
   {
    "element_id": 84,
@@ -59,7 +89,7 @@
    "name": "Hinshelwood",
    "position": "MID",
    "price": 6.0,
-   "owned": 0.9,
+   "owned": 0.8,
    "severity": "CRITICAL",
    "tag": "-",
    "message": "RULED OUT (Ankle injury - Expected back 10 Oct)"
@@ -69,7 +99,7 @@
    "name": "Palestra",
    "position": "DEF",
    "price": 5.4,
-   "owned": 0.9,
+   "owned": 0.8,
    "severity": "CRITICAL",
    "tag": "-",
    "message": "RULED OUT (Thigh injury - Expected back 18 Sep)"
@@ -79,10 +109,20 @@
    "name": "Shahar",
    "position": "DEF",
    "price": 4.0,
-   "owned": 0.3,
+   "owned": 0.2,
    "severity": "CRITICAL",
    "tag": "-",
    "message": "RULED OUT (has joined Arouca on loan for the rest of the seaon.)"
+  },
+  {
+   "element_id": 153,
+   "name": "Disasi",
+   "position": "DEF",
+   "price": 4.5,
+   "owned": 0.1,
+   "severity": "CRITICAL",
+   "tag": "-",
+   "message": "RULED OUT (Suspended until 25 Oct)"
   },
   {
    "element_id": 170,
@@ -149,10 +189,40 @@
    "name": "Mosquera",
    "position": "DEF",
    "price": 5.4,
-   "owned": 2.5,
+   "owned": 2.4,
    "severity": "WARNING",
    "tag": "-",
    "message": "worsened 75% -> 50% (Muscular injury - 50% chance of playing)"
+  },
+  {
+   "element_id": 471,
+   "name": "Milenković",
+   "position": "DEF",
+   "price": 5.5,
+   "owned": 1.6,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "worsened 100% -> 75% (Hamstring injury - 75% chance of playing)"
+  },
+  {
+   "element_id": 36,
+   "name": "Maatsen",
+   "position": "DEF",
+   "price": 4.5,
+   "owned": 0.8,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "worsened 100% -> 25% (Ankle injury - 25% chance of playing)"
+  },
+  {
+   "element_id": 224,
+   "name": "Nketiah",
+   "position": "FWD",
+   "price": 5.5,
+   "owned": 0.7,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
   },
   {
    "element_id": 400,
@@ -165,6 +235,16 @@
    "message": "new news: Calf injury - Expected back 20 Sep"
   },
   {
+   "element_id": 34,
+   "name": "Pau",
+   "position": "DEF",
+   "price": 4.5,
+   "owned": 0.4,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "worsened 100% -> 75% (Hamstring injury - 75% chance of playing)"
+  },
+  {
    "element_id": 506,
    "name": "Udogie",
    "position": "DEF",
@@ -173,6 +253,16 @@
    "severity": "WARNING",
    "tag": "-",
    "message": "worsened 100% -> 75% (Unspecified injury - 75% chance of playing)"
+  },
+  {
+   "element_id": 474,
+   "name": "Jair Cunha",
+   "position": "DEF",
+   "price": 4.5,
+   "owned": 0.2,
+   "severity": "WARNING",
+   "tag": "-",
+   "message": "worsened 100% -> 75% (Hamstring injury - 75% chance of playing)"
   },
   {
    "element_id": 63,
@@ -205,6 +295,16 @@
    "message": "cleared - news removed, fit again"
   },
   {
+   "element_id": 5,
+   "name": "J.Timber",
+   "position": "DEF",
+   "price": 6.5,
+   "owned": 0.1,
+   "severity": "GOOD",
+   "tag": "-",
+   "message": "cleared - news removed, fit again"
+  },
+  {
    "element_id": 53,
    "name": "Manzambi",
    "position": "MID",
@@ -212,7 +312,7 @@
    "owned": 0.1,
    "severity": "GOOD",
    "tag": "-",
-   "message": "improved 0% -> 50%"
+   "message": "cleared - news removed, fit again"
   },
   {
    "element_id": 239,
@@ -230,6 +330,16 @@
    "position": "MID",
    "price": 5.4,
    "owned": 0.1,
+   "severity": "GOOD",
+   "tag": "-",
+   "message": "cleared - news removed, fit again"
+  },
+  {
+   "element_id": 54,
+   "name": "Gomes",
+   "position": "MID",
+   "price": 5.5,
+   "owned": 0.0,
    "severity": "GOOD",
    "tag": "-",
    "message": "cleared - news removed, fit again"
@@ -260,35 +370,35 @@
    "name": "Calafiori",
    "old": 5.7,
    "new": 5.8,
-   "owned": 49.2,
+   "owned": 49.3,
    "direction": "up"
   },
   {
    "name": "Palmer",
    "old": 9.6,
    "new": 9.7,
-   "owned": 27.3,
+   "owned": 26.9,
    "direction": "up"
   },
   {
    "name": "Ødegaard",
    "old": 6.6,
    "new": 6.7,
-   "owned": 18.2,
+   "owned": 18.5,
    "direction": "up"
   },
   {
    "name": "Konsa",
    "old": 4.4,
    "new": 4.5,
-   "owned": 16.6,
+   "owned": 16.9,
    "direction": "up"
   },
   {
    "name": "Hall",
    "old": 5.1,
    "new": 5.2,
-   "owned": 13.8,
+   "owned": 14.1,
    "direction": "up"
   },
   {
@@ -302,28 +412,28 @@
    "name": "Ajayi",
    "old": 4.1,
    "new": 4.2,
-   "owned": 12.4,
+   "owned": 12.8,
    "direction": "up"
   },
   {
    "name": "Elanga",
    "old": 6.1,
    "new": 6.2,
-   "owned": 11.3,
+   "owned": 11.4,
    "direction": "up"
   },
   {
    "name": "Mendy",
    "old": 4.0,
    "new": 4.1,
-   "owned": 8.2,
+   "owned": 8.1,
    "direction": "up"
   },
   {
    "name": "Brobbey",
    "old": 5.9,
    "new": 5.8,
-   "owned": 6.8,
+   "owned": 6.7,
    "direction": "down"
   },
   {

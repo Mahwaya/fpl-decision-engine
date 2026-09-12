@@ -1,8 +1,6 @@
 {
- "should_email": true,
- "reasons": [
-  "GW4 deadline in 3h"
- ],
- "subject": "FPL: GW4 deadline in 3h",
- "body": "DEADLINE — GW4 in 3.1 hours (2026-09-12T12:30:00Z).\n\nCAPTAIN — model says B.Fernandes (6.83 xPts).\n  You have Palmer recorded. Model disagrees.\n\nSnapshot #28 at 2026-09-12T09:21:33.870343+00:00"
+ "should_email": false,
+ "reasons": [],
+ "subject": "FPL: nothing urgent",
+ "body": "CAPTAIN — model says B.Fernandes (5.78 xPts).\n  You have Palmer recorded. Model disagrees.\n\nSnapshot #29 at 2026-09-12T20:37:58.031880+00:00"
 }
